@@ -17,7 +17,7 @@ must be defined
                         self = the message object
                         Returns the object on which the recv_act should be
                         performed on
-        'byte_pos' : {
+        'recv_byte_pos' : {
             '<name>' : <int> - the name is a standardized description of the
                            byte.
                        The int, is the position of the byte within the bytearray
@@ -32,8 +32,8 @@ PLM_SCHEMA = {
         'send_len' : (0,),
         'name'     : 'insteon_received',
         'recv_act' : lambda obj, msg: obj.std_msg_rcvd(msg),
-        'recv_obj' : lambda self : self.core.devices[self.parsed['from_addr_str']],
-        'byte_pos'    : {
+        'recv_obj' : lambda self : self.core.devices[self.insteon_msg.from_addr_str],
+        'recv_byte_pos'    : {
             'from_addr_hi'  : 2,
             'from_addr_mid' : 3,
             'from_addr_low' : 4,
@@ -47,8 +47,9 @@ PLM_SCHEMA = {
     },
     0x51: {
         'rcvd_len' : (25,),
+        'send_len' : (0,),
         'name'     : 'insteon_ext_received',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'from_addr_hi'  : 2,
             'from_addr_mid' : 3,
             'from_addr_low' : 4,
@@ -76,16 +77,18 @@ PLM_SCHEMA = {
     },
     0x52: {
         'rcvd_len' : (4,),
+        'send_len' : (0,),
         'name'     : 'x10_received',
-        'byte_pos'    : {    
+        'recv_byte_pos'    : {    
             'raw_x10'   : 2,
             'x10_flags' : 3,
         }
     },
     0x53: {
         'rcvd_len' : (10,),
+        'send_len' : (0,),
         'name'     : 'all_link_complete',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'link_code'     : 2,
             'group'         : 3,
             'from_addr_hi'  : 4,
@@ -98,22 +101,25 @@ PLM_SCHEMA = {
     },
     0x54: {
         'rcvd_len' : (3,),
+        'send_len' : (0,),
         'name'     : 'plm_button_event',
-        'byte_pos'    : {    
+        'recv_byte_pos'    : {    
             'btn_event' : 2,
         }
     },
     0x55: {
         'rcvd_len' : (2,),
+        'send_len' : (0,),
         'name'     : 'user_plm_reset',
-        'byte_pos'    : {
-            # No other byte_pos
+        'recv_byte_pos'    : {
+            # No other recv_byte_pos
         }
     },
     0x56: {
         'rcvd_len' : (7,),
+        'send_len' : (0,),
         'name'     : 'all_link_clean_failed',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'link_fail'     : 2,
             'group'         : 3,
             'fail_addr_hi'  : 4,
@@ -123,8 +129,9 @@ PLM_SCHEMA = {
     },
     0x57: {
         'rcvd_len' : (10,),
+        'send_len' : (0,),
         'name'     : 'all_link_record',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'link_flags'    : 2,
             'group'         : 3,
             'dev_addr_hi'   : 4,
@@ -137,8 +144,9 @@ PLM_SCHEMA = {
     },
     0x58: {
         'rcvd_len' : (3,),
+        'send_len' : (0,),
         'name'     : 'all_link_clean_status',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
@@ -147,7 +155,7 @@ PLM_SCHEMA = {
         'name'     : 'plm_info',
         'recv_act' : lambda obj, msg: obj.plm_info(msg),
         'recv_obj' : lambda self : self.core.plm,
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_addr_hi'   : 2,
             'plm_addr_mid'  : 3,
             'plm_addr_low'  : 4,
@@ -160,7 +168,7 @@ PLM_SCHEMA = {
     0x61: {
         'rcvd_len' : (6,),
         'name'     : 'all_link_send',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'group'     : 2,
             'cmd_1'     : 3,
             'cmd_2'     : 4,
@@ -173,7 +181,7 @@ PLM_SCHEMA = {
         'name'     : 'insteon_send',
         'recv_act' : lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_obj' : lambda self : self.core.plm,
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'to_addr_hi'    : 2,
             'to_addr_mid'   : 3,
             'to_addr_low'   : 4,
@@ -196,12 +204,56 @@ PLM_SCHEMA = {
             'usr_13'        : 20,
             'usr_14'        : 21,
             'plm_resp_e'    : 22,
-        }
+        },
+        'send_byte_pos'    : {
+            'to_addr_hi'    : 2,
+            'to_addr_mid'   : 3,
+            'to_addr_low'   : 4,
+            'msg_flags'     : 5,
+            'cmd_1'         : 6,
+            'cmd_2'         : 7,
+            'usr_1'         : 8,
+            'usr_2'         : 9,
+            'usr_3'         : 10,
+            'usr_4'         : 11,
+            'usr_5'         : 12,
+            'usr_6'         : 13,
+            'usr_7'         : 14,
+            'usr_8'         : 15,
+            'usr_9'         : 16,
+            'usr_10'        : 17,
+            'usr_11'        : 18,
+            'usr_12'        : 19,
+            'usr_13'        : 20,
+            'usr_14'        : 21,
+        },
+        # 'send_byte_pos'    : {
+            # 2:  'to_addr_hi',
+            # 3:  'to_addr_mid',
+            # 4:  'to_addr_low',
+            # 5:  'msg_flags',
+            # 6:  'cmd_1',
+            # 7:  'cmd_2',
+            # 8:  'usr_1',
+            # 9:  'usr_2',
+            # 10: 'usr_3',
+            # 11: 'usr_4',
+            # 12: 'usr_5',
+            # 13: 'usr_6',
+            # 14: 'usr_7',
+            # 15: 'usr_8',
+            # 16: 'usr_9',
+            # 17: 'usr_10',
+            # 18: 'usr_11',
+            # 19: 'usr_12',
+            # 20: 'usr_13',
+            # 21: 'usr_14',
+        # }
     },
     0x63: {
         'rcvd_len' : (5,),
         'name'     : 'x10_send',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'raw_x10'   : 2,
             'x10_flags' : 3,
             'plm_resp'  : 4,
@@ -210,7 +262,7 @@ PLM_SCHEMA = {
     0x64: {
         'rcvd_len' : (5,),
         'name'     : 'all_link_start',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'link_code' : 2,
             'group'     : 3,
             'plm_resp'  : 4
@@ -219,14 +271,14 @@ PLM_SCHEMA = {
     0x65: {
         'rcvd_len' : (3,),
         'name'     : 'all_link_cancel',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x66: {
         'rcvd_len' : (6,),
         'name'     : 'set_host_device_cat',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'dev_cat'   : 2,
             'sub_cat'   : 3,
             'firmware'  : 4,
@@ -236,36 +288,36 @@ PLM_SCHEMA = {
     0x67: {
         'rcvd_len' : (3,),
         'name'     : 'plm_reset',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x68: {
         'rcvd_len' : (4,),
         'name'     : 'set_insteon_ack_cmd2',
-        'byte_pos'    : {
-            'cmd_2    ' : 2,
+        'recv_byte_pos'    : {
+            'cmd_2'     : 2,
             'plm_resp'  : 3,
         }
     },
     0x69: {
         'rcvd_len' : (3,),
         'name'     : 'all_link_first_rec',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x6A: {
         'rcvd_len' : (3,),
         'name'     : 'all_link_next_rec',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x6B: {
         'rcvd_len' : (4,),
         'name'     : 'plm_set_config',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'conf_flags': 2,
             'plm_resp'  : 3
         }
@@ -273,28 +325,28 @@ PLM_SCHEMA = {
     0x6C: {
         'rcvd_len' : (3,),
         'name'     : 'get_sender_all_link_rec',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x6D: {
         'rcvd_len' : (3,),
         'name'     : 'plm_led_on',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x6E: {
         'rcvd_len' : (3,),
         'name'     : 'plm_led_off',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'plm_resp'  : 2,
         }
     },
     0x6F: {
         'rcvd_len' : (12,),
         'name'     : 'all_link_manage_rec',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'ctrl_code'     : 2,
             'link_flags'    : 3,
             'group'         : 4,
@@ -310,26 +362,26 @@ PLM_SCHEMA = {
     0x70: {
         'rcvd_len' : (4,),
         'name'     : 'insteon_nak',
-        'byte_pos'    : {
-            'cmd_1    ' : 2,
-            'cmd_2    ' : 3,
+        'recv_byte_pos'    : {
+            'cmd_1'     : 2,
+            'cmd_2'     : 3,
             'plm_resp'  : 4,
         }
     },
     0x71: {
         'rcvd_len' : (4,),
         'name'     : 'insteon_ack',
-        'byte_pos'    : {
-            'cmd_2    ' : 2,
+        'recv_byte_pos'    : {
+            'cmd_2'     : 2,
             'plm_resp'  : 3,
         }
     },
     0x72: {
         'rcvd_len' : (5,),
         'name'     : 'rf_sleep',
-        'byte_pos'    : {
-            'cmd_1    ' : 2,
-            'cmd_2    ' : 3,
+        'recv_byte_pos'    : {
+            'cmd_1'     : 2,
+            'cmd_2'     : 3,
             'plm_resp'  : 4,
         }
     },
@@ -337,7 +389,7 @@ PLM_SCHEMA = {
         'rcvd_len' : (6,),
         'send_len' : (2,),
         'name'     : 'plm_get_config',
-        'byte_pos'    : {
+        'recv_byte_pos'    : {
             'conf_flags': 2,
             'spare_1'   : 3,
             'spare_2'   : 4,
@@ -734,12 +786,5 @@ COMMAND_SCHEMA = {
                 }
             ]
         }
-    ]
-}
-
-PLM_COMMAND_SCHEMA = {
-    'get_im_info' : [
-        0x02,
-        0x60
     ]
 }

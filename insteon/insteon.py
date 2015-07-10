@@ -124,7 +124,7 @@ class PLM(object):
         # No matter what, pause for a short period before sending to PLM
         self.wait_to_send = time.time() + (20/1000)
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
-        msg = Insteon_Message(self.core, \
+        msg = PLM_Message(self.core, \
                               raw_data = raw_msg, 
                               is_incomming = True)
         if 'recv_act' in msg.plm_schema:
@@ -137,14 +137,14 @@ class PLM(object):
                 return
             try:
                 msg.plm_schema['recv_act'](obj, msg)
-            except:
+            except Exception as e:
                 # Use this to somehow keep messages in the queue??
                 # Not sure that is really possible, won't we just end
                 # up here again?
-                pass
+                print('Error', e)
         else:
             print('received msg, but no action specified')
-            pprint.pprint(msg.parsed)
+            pprint.pprint(msg.__dict__)
         
     def queue_msg(self,msg):
         self._msg_queue.append(msg)
@@ -175,11 +175,16 @@ class PLM(object):
             self.firmware = msg_obj.details['firmware']
 
     def send_command(self,command):
-        if command in PLM_COMMAND_SCHEMA:
-            cmd_bytes = PLM_COMMAND_SCHEMA[command].copy()
-            # This needs to get converted to a MSG object
+        cmd_schema = False
+        for plm_prefix, schema in PLM_SCHEMA.items():
+            if schema['name'] == command:
+                cmd_schema = schema
+                break
+        if cmd_schema:
+            message = Insteon_Message(self.core, device=self, command=cmd_schema)
+            self._queue_msg(message, state)
         else:
-            print("sorry I don't know the command", command)
+            print('command not found')
 
     def process_unacked_msg(self):
         '''checks for unacked messages'''
@@ -187,30 +192,31 @@ class PLM(object):
             msg = self._last_msg
         else:
             return
+        now = datetime.datetime.now().strftime("%M:%S.%f")
         # allow 75 milliseconds for the PLM to ack a message
         if msg.plm_ack == False: 
             if msg.time_sent < time.time() - (75/1000):
-                print('PLM failed to ack the last message')
+                print(now, 'PLM failed to ack the last message')
                 if msg.plm_retry >= 3:
-                    print('PLM retries exceeded, abandoning this message')
+                    print(now, 'PLM retries exceeded, abandoning this message')
                     msg.failed = True
                 else:
                     msg.plm_retry += 1
                     self._resend_msg()
             return
-        if msg.device_ack == False:
-            total_hops = msg.parsed['max_hops'] *2
-            hop_delay = 87 if msg.parsed['msg_length'] == 'standard' else 183
+        if msg.insteon_msg and msg.insteon_msg.device_ack == False:
+            total_hops = msg.insteon_msg.max_hops *2
+            hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
             # These numbers come from real world use (87, 183)
             # 100ms for device to process the msg internally
             total_delay = total_hops * hop_delay + (100/1000)
             if msg.time_sent < time.time() - total_delay:
-                print('device failed to ack a message')
-                if msg.device_retry >= 3:
-                    print('device retries exceeded, abandoning this message')
+                print(now, 'device failed to ack a message, total delay =', total_delay, 'total hops=', total_hops)
+                if msg.insteon_msg.device_retry >= 3:
+                    print(now, 'device retries exceeded, abandoning this message')
                     msg.failed = True
                 else:
-                    msg.device_retry += 1
+                    msg.insteon_msg.device_retry += 1
                     self._resend_msg()
             return
 
@@ -221,169 +227,170 @@ class PLM(object):
         self._msg_queue and \
         time.time() > self.wait_to_send:
             msg = self._msg_queue.pop(0)
-            device = self.core.devices[msg.parsed['to_addr_str']]
+            #TODO TEST IF this is an Insteon Message
+            device = msg.insteon_msg.device
             device.last_msg = msg
             self._send_msg(msg)
 
     def _is_ack_pending(self):
         ret = False
-        if self._last_msg and \
-           self._last_msg.failed != True and \
-           (self._last_msg.plm_ack == False or \
-           self._last_msg.device_ack == False):
-            ret = True
+        if self._last_msg and not self._last_msg.failed:
+            if not self._last_msg.plm_ack:
+                ret = True
+            elif self._last_msg.insteon_msg and \
+            not self._last_msg.insteon_msg.device_ack:
+                ret = True
         return ret
 
     def rcvd_plm_ack(self,msg):
         if self._last_msg.plm_ack == False\
         and msg.raw_msg[0:-1] == self._last_msg.raw_msg:
-            if msg.raw_msg[-1] == 0x06:
+            if msg.plm_resp_ack:
                 self._last_msg.plm_ack = True
-            elif msg.raw_msg[-1] == 0x15:
+            elif msg.plm_resp_nack:
                 print('PLM sent NACK to last command')
                 self.wait_to_send = time.time() + .5
-            elif msg.raw_msg[-1] == 0x0F:
+            elif msg.plm_resp_bad_cmd:
                 print('PLM said bad command')
                 self.wait_to_send = time.time() + .5
         else:
             print('received spurious plm ack')
 
-class Insteon_Message(object):
+class PLM_Message(object):
+    #Initialization Functions
     def __init__(self, core, **kwargs):
         self._core = core
-        self._device_ack = False
         self._plm_ack = False
         self._is_incomming = False
         self._plm_retry = 0
-        self._device_retry = 0
         self._failed = False
-        if 'is_incomming' in kwargs:
-            self._is_incomming = True
-        if 'raw_data' in kwargs:
-            self.msg_from_raw(kwargs['raw_data'])
-        elif 'command' in kwargs:
-            self.command_to_raw(kwargs['command'], kwargs['schema'])
+        self._plm_schema = {}
+        self._raw_msg = bytes()
+        self._insteon_msg = {}
+        if 'is_incomming' in kwargs: self._is_incomming = True
+        self.msg_from_raw(**kwargs)
+        self.command_to_raw(**kwargs)
 
-    def msg_from_raw(self, data):
-        self.parsed = {}
-        self.parsed['prefix'] = data[1]
-        self.plm_schema = PLM_SCHEMA[self.parsed['prefix']]
-        self.parsed['plm_cmd_type'] = self.plm_schema['name']
-        for attr, position in self.plm_schema['byte_pos'].items():
-            if len(data) > position: 
-                self.parsed[attr] = data[position]
-        #Translate PLM Response Byte
-        resp_type = 'plm_resp'
-        if 'plm_resp_e' in self.parsed:
-            resp_type = 'plm_resp_e'
-        if resp_type in self.parsed:
-            if self.parsed[resp_type] ==0x06:
-                self.parsed['plm_ack'] = True
-            elif self.parsed[resp_type] == 0x15:
-                self.parsed['plm_nack'] = True
-            elif self.parsed[resp_type] == 0x0F:
-                self.parsed['plm_bad_cmd'] = True
-        #Translate Insteon Msg Flag
-        if 'msg_flags' in self.parsed:
-            msg_flags = self.parsed['msg_flags']
-            msg_types = {
-                4:'broadcast',
-                0:'direct',
-                1:'direct_ack',
-                5:'direct_nack',
-                6:'alllink_broadcast',
-                2:'alllink_cleanup',
-                3:'alllink_cleanup_ack',
-                7:'alllink_cleanup_nack'
-            }
-            message_type = msg_flags & 0b11100000
-            message_type = message_type >> 5
-            self.parsed['message_type'] = msg_types[message_type]
-            self.parsed['msg_length'] = 'standard'
-            if msg_flags & 16:
-                self.parsed['msg_length'] = 'extended'
-            hops_left = msg_flags & 0b00001100
-            hops_left = hops_left >> 2
-            self.parsed['hops_left'] = hops_left 
-            max_hops = msg_flags & 0b00000011
-            self.parsed['max_hops'] = max_hops
-        #Translate device addresses
-        if 'to_addr_hi' in self.parsed:
-            to_addr = bytes((self.parsed['to_addr_hi'],self.parsed['to_addr_mid'],self.parsed['to_addr_low']))
-            self.parsed['to_addr_str'] = BYTE_TO_HEX(to_addr)
-        if 'from_addr_hi' in self.parsed:
-            from_addr = bytes((self.parsed['from_addr_hi'],self.parsed['from_addr_mid'],self.parsed['from_addr_low']))
-            self.parsed['from_addr_str'] = BYTE_TO_HEX(from_addr)
+    def msg_from_raw(self, **kwargs):
+        if 'raw_data' not in kwargs:
+            return
+        self._plm_schema = PLM_SCHEMA[kwargs['raw_data'][1]].copy()
+        self._raw_msg = kwargs['raw_data']
+        self._init_insteon_msg(**kwargs)
 
-    def command_to_raw(self, command, schema):
+    def command_to_raw(self, **kwargs):
         '''Takes a command dictionary and builds an Insteon
         message'''
-        command['hops_left'] = command['max_hops']
-        #TODO this is a bit sloppy
-        command['message_type'] = schema['message_type']
-        command['msg_length'] = schema['msg_length']
-        #Construct the message flags
-        msg_types = {
-            'broadcast'             : 4,
-            'direct'                : 0,
-            'direct_ack'            : 1,
-            'direct_nack'           : 5,
-            'alllink_broadcast'     : 6,
-            'alllink_cleanup'       : 2, 
-            'alllink_cleanup_ack'   : 3,
-            'alllink_cleanup_nack'  : 7,
-        }
-        msg_flags = msg_types[command['message_type']]
-        msg_flags = msg_flags << 5
-        if command['msg_length'] == 'extended':
-            msg_flags = msg_flags | 16
-        hops_left = command['hops_left'] << 2
-        msg_flags = msg_flags | hops_left
-        msg_flags = msg_flags | command['max_hops']
-        command['msg_flags'] = msg_flags
-        # Process functions if they exist
-        device = self._core.devices[command['to_addr_str']]
-        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 'usr_3', 'usr_4', 'usr_5', 'usr_6',
-         'usr_7', 'usr_8', 'usr_9', 'usr_10', 'usr_11', 'usr_12', 'usr_13', 'usr_14')
-        #could shorten this by just searching for callable keys in command
-        for key in keys:
-            if key in schema:
-                if callable(schema[key]):
-                    command[key] = schema[key](device)
-                else:
-                    command[key] = schema[key]
-        self.parsed = command
+        if 'plm_cmd' not in kwargs:
+            return
+        plm_cmd = kwargs['plm_cmd']
+        plm_prefix = self._set_plm_schema(plm_cmd)
+        if not plm_prefix:
+            return
+        if not self._initialize_raw_msg(plm_cmd, plm_prefix):
+            return
+        self._init_insteon_msg(**kwargs)
         return self
-    
+
+    def _init_insteon_msg(self, **kwargs):
+        if self.plm_schema['name'] in ['insteon_received', \
+        'insteon_ext_received', 'insteon_send']:
+            self._insteon_msg = Insteon_Message(self, **kwargs)
+
+    def _initialize_raw_msg(self,plm_cmd,plm_prefix):
+        msg_direction = 'send_len'
+        if self.is_incomming:
+            msg_direction = 'rcvd_len'
+        if msg_direction in self.plm_schema:
+            self._raw_msg = bytearray(self.plm_schema[msg_direction][0])
+            self._raw_msg[0] = 0x02
+            self._raw_msg[1] = plm_prefix
+            return True
+        else:
+            return False
+
+
+    # Set Bytes in Message
+    def _set_plm_schema(self,plm_cmd):
+        plm_schema = False
+        for plm_prefix, schema in PLM_SCHEMA.items():
+            if schema['name'] == plm_cmd:
+                plm_schema = schema
+                break
+        if plm_schema:
+            self._plm_schema = plm_schema
+            return plm_prefix
+        else:
+            print("I don't know that plm command")
+            return False
+
+    def _insert_byte_into_raw(self,data_byte,pos_name):
+        pos = self.attribute_positions[pos_name]
+        self._raw_msg[pos] = data_byte
+        return
+
+    #Read Message Bytes
+    @property
+    def attribute_positions(self):
+        msg_direction = 'send_byte_pos'
+        if self.is_incomming:
+            msg_direction = 'recv_byte_pos'
+        return self.plm_schema[msg_direction]
+
+    @property
+    def plm_resp_flag(self):
+        if 'plm_resp' in self.attribute_positions or \
+        'plm_resp_e' in self.attribute_positions:
+            byte_pos = self.attribute_positions['plm_resp']
+            if 'plm_resp_e' in self.attribute_positions:
+                byte_pos_e = self.attribute_positions['plm_resp']
+                if byte_pos_e < len(self.raw_msg):
+                    byte_pos = byte_pos_e
+            return self.raw_msg[byte_pos]
+        else:
+            return False
+
+    @property 
+    def plm_resp_ack(self):
+        ret = False
+        if self.plm_resp_flag == 0x06:
+            ret = True
+        return ret
+
+    @property 
+    def plm_resp_nack(self):
+        ret = False
+        if self.plm_resp_flag == 0x15:
+            ret = True
+        return ret
+
+    @property 
+    def plm_resp_bad_cmd(self):
+        ret = False
+        if self.plm_resp_flag == 0x0F:
+            ret = True
+        return ret
+
     @property
     def raw_msg(self):
-        #Construct the raw message
-        cmd_structure = {}
-        raw_msg = None
-        for prefix in PLM_SCHEMA:
-            if PLM_SCHEMA[prefix]['name'] == self.parsed['plm_cmd_type']:
-                cmd_structure = PLM_SCHEMA[prefix]
-                cmd_prefix = prefix
-        if cmd_structure:
-            #This looks a little sloppy
-            msg_length = cmd_structure['send_len'][0]
-            if self.parsed['msg_length'] == 'extended':
-                msg_length = cmd_structure['send_len'][1]
-            if self.is_incomming:
-                msg_length = cmd_structure['rcvd_len'][0]
-                if self.parsed['msg_length'] == 'extended':
-                    msg_length = cmd_structure['rcvd_len'][1]
-            raw_msg = bytearray(msg_length)
-            raw_msg[0] = 0x02
-            raw_msg[1] = cmd_prefix
-            for attribute, position in cmd_structure['byte_pos'].items():
-                try:
-                    raw_msg[position] = self.parsed[attribute]
-                except KeyError:
-                    pass
-        else:
-            print("sorry I don't know that PLM command", self.parsed['plm_cmd_type'])
-        return raw_msg
+        return self._raw_msg.copy()
+
+    def get_byte_by_name(self,byte_name):
+        ret = False
+        if byte_name in self.attribute_positions:
+            pos = self.attribute_positions[byte_name]
+            if pos < len(self.raw_msg):
+                ret = self.raw_msg[pos]
+        return ret
+
+    #Message Meta Data
+    @property
+    def plm_schema(self):
+        return self._plm_schema
+
+    @property
+    def plm_cmd_type(self):
+        return self.plm_schema['name']
 
     @property
     def is_incomming(self):
@@ -406,16 +413,75 @@ class Insteon_Message(object):
         self._plm_ack = boolean
 
     @property
-    def device_ack(self):
-        return self._device_ack
-
-    @device_ack.setter
-    def device_ack(self,boolean):
-        self._device_ack = boolean
-
-    @property
     def core(self):
         return self._core
+
+    @property
+    def plm_retry(self):
+        return self._plm_retry
+
+    @plm_retry.setter
+    def plm_retry(self,count):
+        self._plm_retry = count
+
+    @property
+    def insteon_msg(self):
+        return self._insteon_msg
+
+class Insteon_Message(object):
+    def __init__(self, parent, **kwargs):
+        self._device_ack = False
+        self._device_retry = 0
+        self._cmd_schema = {}
+        self._device_cmd_name = ''
+        self._parent = parent
+        #Need to reinitialize the message length??? Extended message
+        if 'device' in kwargs:
+            self._device = kwargs['device']
+        if 'dev_cmd' in kwargs:
+            self._construct_insteon_send(kwargs['dev_cmd'])
+
+    def _construct_insteon_send(self,dev_cmd):
+        msg_flags = self._construct_msg_flags(dev_cmd)
+        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
+        self._parent._insert_byte_into_raw(self.device.dev_id_hi,'to_addr_hi')
+        self._parent._insert_byte_into_raw(self.device.dev_id_mid,'to_addr_mid')
+        self._parent._insert_byte_into_raw(self.device.dev_id_low,'to_addr_low')
+        # Process functions if they exist
+        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 'usr_3', 'usr_4', 'usr_5', 'usr_6',
+         'usr_7', 'usr_8', 'usr_9', 'usr_10', 'usr_11', 'usr_12', 'usr_13', 'usr_14')
+        #could shorten this by just searching for callable keys in command
+        for key in keys:
+            if key in dev_cmd and callable(dev_cmd[key]):
+                value = dev_cmd[key](self.device)
+                self._parent._insert_byte_into_raw(value,key)
+            elif key in dev_cmd:
+                self._parent._insert_byte_into_raw(dev_cmd[key],key)
+        self._device_cmd_name = dev_cmd['name']
+
+    def _construct_msg_flags(self,dev_cmd):
+        msg_types = {
+            'broadcast'             : 4,
+            'direct'                : 0,
+            'direct_ack'            : 1,
+            'direct_nack'           : 5,
+            'alllink_broadcast'     : 6,
+            'alllink_cleanup'       : 2, 
+            'alllink_cleanup_ack'   : 3,
+            'alllink_cleanup_nack'  : 7,
+        }
+        msg_flags = msg_types[dev_cmd['message_type']]
+        msg_flags = msg_flags << 5
+        if dev_cmd['msg_length'] == 'extended':
+            msg_flags = msg_flags | 16
+        hops_left = self.device.smart_hops << 2
+        msg_flags = msg_flags | hops_left
+        msg_flags = msg_flags | self.device.smart_hops
+        return msg_flags
+
+    @property
+    def device(self):
+        return self._device
 
     @property
     def device_retry(self):
@@ -426,12 +492,89 @@ class Insteon_Message(object):
         self._device_retry = count
 
     @property
-    def plm_retry(self):
-        return self._plm_retry
+    def device_cmd_name(self):
+        return self._device_cmd_name
 
-    @plm_retry.setter
-    def plm_retry(self,count):
-        self._plm_retry = count
+    @property
+    def message_type(self):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        ret = False
+        if msg_flags:
+            msg_types = {
+                4:'broadcast',
+                0:'direct',
+                1:'direct_ack',
+                5:'direct_nack',
+                6:'alllink_broadcast',
+                2:'alllink_cleanup',
+                3:'alllink_cleanup_ack',
+                7:'alllink_cleanup_nack'
+            }
+            message_type = msg_flags & 0b11100000
+            message_type = message_type >> 5
+            ret = msg_types[message_type]
+        return ret
+
+    @property
+    def msg_length(self):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        ret = False
+        if msg_flags:
+            ret = 'standard'
+            if msg_flags & 16:
+                ret = 'extended'
+        return ret
+
+    @property
+    def hops_left(self):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        ret = False
+        if msg_flags:
+            hops_left = msg_flags & 0b00001100
+            ret = hops_left >> 2
+        return ret
+
+    @property
+    def max_hops(self):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        ret = False
+        if msg_flags:
+            ret = msg_flags & 0b00000011
+        return ret
+
+    @property
+    def to_addr_str(self):
+        if 'to_addr_hi' in self._parent.attribute_positions:
+            byte_pos_hi = self._parent.attribute_positions['to_addr_hi']
+            byte_pos_mid = self._parent.attribute_positions['to_addr_mid']
+            byte_pos_low = self._parent.attribute_positions['to_addr_low']
+            return BYTE_TO_HEX(bytes((self._parent.raw_msg[byte_pos_hi],
+                                       self._parent.raw_msg[byte_pos_mid],
+                                       self._parent.raw_msg[byte_pos_low],
+            )))
+        else:
+            return False
+
+    @property
+    def from_addr_str(self):
+        if 'to_addr_hi' in self._parent.attribute_positions:
+            byte_pos_hi = self._parent.attribute_positions['from_addr_hi']
+            byte_pos_mid = self._parent.attribute_positions['from_addr_mid']
+            byte_pos_low = self._parent.attribute_positions['from_addr_low']
+            return BYTE_TO_HEX(bytes((self._parent.raw_msg[byte_pos_hi],
+                                       self._parent.raw_msg[byte_pos_mid],
+                                       self._parent.raw_msg[byte_pos_low],
+            )))
+        else:
+            return False
+
+    @property
+    def device_ack(self):
+        return self._device_ack
+
+    @device_ack.setter
+    def device_ack(self,boolean):
+        self._device_ack = boolean
 
 class Device(object):
     def __init__(self, core, plm, **kwargs):
@@ -500,18 +643,30 @@ class Device(object):
         self._dev_id_mid = int(dev_id_str[2:4], 16)
         self._dev_id_low = int(dev_id_str[4:6], 16)
 
+    @property
+    def dev_id_hi(self):
+        return self._dev_id_hi
+
+    @property
+    def dev_id_mid(self):
+        return self._dev_id_mid
+
+    @property
+    def dev_id_low(self):
+        return self._dev_id_low
+
     def std_msg_rcvd(self,msg):
         if self._is_duplicate(msg):
             print ('Skipped duplicate msg')
             return
         # TODO add something to weed out unexpected ACKs
-        if msg.parsed['message_type'] == 'direct_ack':
+        if msg.insteon_msg.message_type == 'direct_ack':
             self._process_direct_ack(msg)
-        elif msg.parsed['message_type'] == 'broadcast':
+        elif msg.insteon_msg.message_type == 'broadcast':
             self._set_plm_wait(msg)
-            self.dev_cat = msg.parsed['to_addr_hi']
-            self.sub_cat = msg.parsed['to_addr_mid']
-            self.firmware = msg.parsed['to_addr_low']
+            self.dev_cat = msg.get_byte_by_name('to_addr_hi')
+            self.sub_cat = msg.get_byte_by_name('to_addr_mid')
+            self.firmware = msg.get_byte_by_name('to_addr_low')
             print('was broadcast')
 
     def _process_direct_ack(self,msg):
@@ -520,18 +675,18 @@ class Device(object):
         self._add_to_hop_tracking(msg)
         if not self._is_valid_direct_ack(msg):
             return
-        elif self.last_msg.parsed['name'] == 'light_status_request':
+        elif self.last_msg.insteon_msg.device_cmd_name == 'light_status_request':
             print('was status response')
-            self._aldb_delta = msg.parsed['cmd_1']
-            self.status = msg.parsed['cmd_2']
-            self.last_msg.device_ack = True
-        elif msg.parsed['cmd_1'] in STD_DIRECT_ACK_SCHEMA:
-            command = STD_DIRECT_ACK_SCHEMA[msg.parsed['cmd_1']]
+            self._aldb_delta = msg.get_byte_by_name('cmd_1')
+            self.status = msg.get_byte_by_name('cmd_2')
+            self.last_msg.insteon_msg.device_ack = True
+        elif msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
+            command = STD_DIRECT_ACK_SCHEMA[msg.get_byte_by_name('cmd_1')]
             search_list = [
                 ['DevCat'    , self.dev_cat],
                 ['SubCat'    , self.sub_cat],
                 ['Firmware'  , self.firmware],
-                ['Cmd2'      , self.last_msg.parsed['cmd_2']]
+                ['Cmd2'      , self.last_msg.get_byte_by_name('cmd_2')]
             ]
             for search_item in search_list:
                 command = self._recursive_search_cmd(command,search_item)
@@ -539,10 +694,10 @@ class Device(object):
                     print('not sure how to respond to this')
                     return
             command(self,msg)
-            self.last_msg.device_ack = True
-        elif self.last_msg.parsed['cmd_1'] == msg.parsed['cmd_1']:
+            self.last_msg.insteon_msg.device_ack = True
+        elif self.last_msg.get_byte_by_name('cmd_1') == msg.get_byte_by_name('cmd_1'):
             print('rcvd un coded ack')
-            self.last_msg.device_ack = True
+            self.last_msg.insteon_msg.device_ack = True
         else:
             print('ignoring an unmatched ack')
             pprint.pprint(msg.__dict__)
@@ -552,13 +707,13 @@ class Device(object):
         if self.last_msg.plm_ack != True:
             print ('ignoring a device ack received before PLM ack')
             ret = False
-        elif self.last_msg.device_ack != False:
+        elif self.last_msg.insteon_msg.device_ack != False:
             print ('ignoring an unexpected device ack')
             ret = False
         return ret
 
     def _add_to_hop_tracking(self,msg):
-        hops_used = msg.parsed['max_hops'] - msg.parsed['hops_left']
+        hops_used = msg.insteon_msg.max_hops - msg.insteon_msg.hops_left
         self._hop_array.append(hops_used)
         extra_data = len(self._hop_array) - 10
         if extra_data > 0:
@@ -574,14 +729,14 @@ class Device(object):
 
     def _set_plm_wait(self,msg,is_extra_slow = False):
         # These numbers come from real world use
-        hop_delay = 87 if msg.parsed['msg_length'] == 'standard' else 183
-        total_delay = hop_delay * msg.parsed['hops_left']
+        hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
+        total_delay = hop_delay * msg.insteon_msg.hops_left
         if is_extra_slow:
             #Primarily used for Direct Ack messages where we want to ensure
             #accurate data.  We add an extra delay assuming a complete resend
             #of the prior message with +1 hops, as if the PLM ACK was never
             #received by the device
-            total_delay += hop_delay * (msg.parsed['max_hops'] + 1) * 2
+            total_delay += hop_delay * (msg.insteon_msg.max_hops + 1) * 2
         expire_time = time.time() + (total_delay / 1000)
         self.plm.wait_to_send = expire_time
 
@@ -620,17 +775,16 @@ class Device(object):
     def _store_msg_in_recent(self,msg):
         search_key = self._get_search_key(msg)
         # These numbers come from real world use
-        hop_delay = 87 if msg.parsed['msg_length'] == 'standard' else 183
-        total_delay = hop_delay * msg.parsed['hops_left']
+        hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
+        total_delay = hop_delay * msg.insteon_msg.hops_left
         expire_time = time.time() + (total_delay / 1000)
         self._recent_inc_msgs[search_key] = expire_time
 
     def send_command(self, command_name, state = ''):
-        command = {}
         try:
-            cmd_schema = COMMAND_SCHEMA[command_name].copy()
-        except:
-            print('command not found')
+            cmd_schema = COMMAND_SCHEMA[command_name]
+        except Exception as e:
+            print('command not found', e)
             return False
         search_list = [
             ['DevCat'    , self.dev_cat],
@@ -642,15 +796,9 @@ class Device(object):
             if not cmd_schema:
                 print('command not available for this device')
                 return False
-        command['prefix'] = 0x62
-        command['plm_cmd_type'] = 'insteon_send'
+        command = cmd_schema.copy()
         command['name'] = command_name
-        command['max_hops'] = self.smart_hops
-        command['to_addr_str'] = self.device_id_str
-        command['to_addr_hi'] = self._dev_id_hi
-        command['to_addr_mid'] = self._dev_id_mid
-        command['to_addr_low'] = self._dev_id_low
-        message = Insteon_Message(self._core, command=command, schema=cmd_schema)
+        message = PLM_Message(self._core, device=self, plm_cmd='insteon_send', dev_cmd=command)
         self._queue_msg(message, state)
 
     def _queue_msg(self,message,state):
@@ -716,15 +864,15 @@ class Device(object):
     def ack_set_msb (self, msg):
         '''currently called when set_address_msb ack received'''
         if self.state_machine == 'query_aldb' and \
-           self.msb == msg.parsed['cmd_2']:
+           self.msb == msg.get_byte_by_name('cmd_2'):
             self.peek_aldb()
 
     def ack_peek_aldb(self,msg):
         if self.state_machine == 'query_aldb' and \
-           self.last_msg.parsed['name'] == 'peek_one_byte':
+           self.last_msg.insteon_msg.device_cmd_name == 'peek_one_byte':
             if (self.lsb % 8) == 0:
                 self.aldb[self._get_aldb_key()] = bytearray(8)
-            self.aldb[self._get_aldb_key()][self.lsb % 8] = msg.parsed['cmd_2']
+            self.aldb[self._get_aldb_key()][self.lsb % 8] = msg.get_byte_by_name('cmd_2')
             if self.is_last_aldb(self._get_aldb_key()):
                 #this is the last entry on this device
                 for key in sorted(self.aldb):
