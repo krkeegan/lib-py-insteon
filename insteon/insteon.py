@@ -22,6 +22,7 @@ class Insteon_Core(object):
         self.plm.process_unacked_msg()
         for id, device in self.devices.items():
             device.process_device_queue()
+        self.plm.process_device_queue()
         self.plm.process_queue()
 
     def add_device(self, device_id, **kwargs):
@@ -32,9 +33,84 @@ class Insteon_Core(object):
         self.devices[device_id] = Device(self, plm, device_id=device_id)
         return self.devices[device_id]
 
-class PLM(object):
+class Base_Device(object):
+    def __init__(self, core, plm):
+        self._core = core
+        self._plm = plm
+        self._state_machine = 'default'
+        self._state_machine_time = 0
+        self._device_msg_queue = {}
+
+    @property
+    def core(self):
+        return self._core
+
+    @property
+    def plm(self):
+        return self._plm
+
+    @property
+    def state_machine(self):
+        '''The state machine tracks the 'state' that the device is in. This is necessary
+        because Insteon is not a stateless protocol, interpreting some incoming messages
+        requires knowing what commands were previously issued to the device.
+        
+        Whenever a state is set, only messages of that state will be sent to the device,
+        all other messages will wait in a queue.  To avoid locking up a device, a state
+        will automatically be eliminated if it has not been updated within 5 seconds.
+        You can update a state by setting the state machine to the same value again or
+        sending a command with the appropriate state value'''
+        if self._state_machine_time <= (time.time() - 5) and \
+        self._state_machine != 'default':
+            print (self._state_machine, "state expired")
+            self._state_machine = 'default'
+            self._state_machine_time = time.time()
+        return self._state_machine
+    
+    def remove_state_machine(self,value):
+        if value == self.state_machine:
+            print('finished', self.state_machine)
+            self._state_machine = 'default'
+            self._state_machine_time = time.time()
+        else:
+            print(value, 'was not the active state_machine')
+
+    def _queue_device_msg(self,message,state):
+        if state == '': state = 'default'
+        if state not in self._device_msg_queue:
+            self._device_msg_queue[state] = []
+        self._device_msg_queue[state].append(message)
+
+    def process_device_queue(self):
+        '''Sends the next message in the queue to the PLM if the state_machine
+        is in the correct state'''
+        next_state = False
+        for state in self._device_msg_queue:
+            if state != 'default':
+                next_state = state
+                break
+        if self.state_machine != 'default' and \
+        self._device_msg_queue[self.state_machine]:
+            # Reset state_machine timer
+            self._state_machine_time = time.time()
+            msg = self._device_msg_queue[self.state_machine].pop(0)
+            self.plm.queue_msg(msg)
+        elif next_state and \
+        self._device_msg_queue[next_state]:
+            # Set new state_machine timer
+            self._state_machine = next_state
+            self._state_machine_time = time.time()
+            msg = self._device_msg_queue[self.state_machine].pop(0)
+            self.plm.queue_msg(msg)
+        elif self.state_machine == 'default' and \
+        'default' in self._device_msg_queue and \
+        self._device_msg_queue['default']:
+            msg = self._device_msg_queue['default'].pop(0)
+            self.plm.queue_msg(msg)
+
+class PLM(Base_Device):
     def __init__(self, port, core):
-        self.core = core
+        super().__init__(core, self)
         self._read_buffer = bytearray()
         self._last_msg = ''
         self._msg_queue = []
@@ -168,23 +244,16 @@ class PLM(object):
         return
 
     def plm_info(self,msg_obj):
-        if msg_obj.details['plm_ack']:
-            self.device_id = msg_obj.details['from_addr']
-            self.dev_cat = msg_obj.details['dev_cat']
-            self.sub_cat = msg_obj.details['sub_cat']
-            self.firmware = msg_obj.details['firmware']
+        if self._last_msg.plm_cmd_type == 'plm_info' and msg_obj.plm_resp_ack:
+            self._last_msg.plm_ack = True
+            self.device_id = msg_obj.get_byte_by_name('from_addr')
+            self.dev_cat = msg_obj.get_byte_by_name('dev_cat')
+            self.sub_cat = msg_obj.get_byte_by_name('sub_cat')
+            self.firmware = msg_obj.get_byte_by_name('firmware')
 
-    def send_command(self,command):
-        cmd_schema = False
-        for plm_prefix, schema in PLM_SCHEMA.items():
-            if schema['name'] == command:
-                cmd_schema = schema
-                break
-        if cmd_schema:
-            message = Insteon_Message(self.core, device=self, command=cmd_schema)
-            self._queue_msg(message, state)
-        else:
-            print('command not found')
+    def send_command(self,command, state = ''):
+        message = PLM_Message(self.core, device=self, plm_cmd=command)
+        self._queue_device_msg(message, state)
 
     def process_unacked_msg(self):
         '''checks for unacked messages'''
@@ -227,9 +296,9 @@ class PLM(object):
         self._msg_queue and \
         time.time() > self.wait_to_send:
             msg = self._msg_queue.pop(0)
-            #TODO TEST IF this is an Insteon Message
-            device = msg.insteon_msg.device
-            device.last_msg = msg
+            if msg.insteon_msg:
+                device = msg.insteon_msg.device
+                device.last_msg = msg
             self._send_msg(msg)
 
     def _is_ack_pending(self):
@@ -255,8 +324,8 @@ class PLM(object):
                 self.wait_to_send = time.time() + .5
         else:
             print('received spurious plm ack')
-
-class PLM_Message(object):
+            
+class PLM_Message(Base_Device):
     #Initialization Functions
     def __init__(self, core, **kwargs):
         self._core = core
@@ -308,7 +377,6 @@ class PLM_Message(object):
             return True
         else:
             return False
-
 
     # Set Bytes in Message
     def _set_plm_schema(self,plm_cmd):
@@ -386,7 +454,7 @@ class PLM_Message(object):
     #Message Meta Data
     @property
     def plm_schema(self):
-        return self._plm_schema
+        return self._plm_schema.copy()
 
     @property
     def plm_cmd_type(self):
@@ -411,10 +479,6 @@ class PLM_Message(object):
     @plm_ack.setter
     def plm_ack(self,boolean):
         self._plm_ack = boolean
-
-    @property
-    def core(self):
-        return self._core
 
     @property
     def plm_retry(self):
@@ -576,10 +640,9 @@ class Insteon_Message(object):
     def device_ack(self,boolean):
         self._device_ack = boolean
 
-class Device(object):
+class Device(Base_Device):
     def __init__(self, core, plm, **kwargs):
-        self._core = core
-        self._plm = plm
+        super().__init__(core, plm)
         self._dev_id_str_to_bytes(kwargs['device_id'])
         self.dev_cat = 0x01
         self.sub_cat = 0x20
@@ -587,13 +650,10 @@ class Device(object):
         self.last_msg = ''
         self._aldb_delta = ''
         self.status = ''
-        self._state_machine = 'default'
-        self._state_machine_time = 0
         self._msb = ''
         self._lsb = ''
         self.aldb = {}
         self._recent_inc_msgs = {}
-        self._msg_queue = {}
         self._hop_array = []
 
     @property
@@ -605,38 +665,8 @@ class Device(object):
         return self._lsb
 
     @property
-    def plm(self):
-        return self._plm
-
-    @property
     def device_id_str(self):
         return BYTE_TO_HEX(bytes([self._dev_id_hi,self._dev_id_mid,self._dev_id_low]))
-
-    @property
-    def state_machine(self):
-        '''The state machine tracks the 'state' that the device is in. This is necessary
-        because Insteon is not a stateless protocol, interpreting some incoming messages
-        requires knowing what commands were previously issued to the device.
-        
-        Whenever a state is set, only messages of that state will be sent to the device,
-        all other messages will wait in a queue.  To avoid locking up a device, a state
-        will automatically be eliminated if it has not been updated within 5 seconds.
-        You can update a state by setting the state machine to the same value again or
-        sending a command with the appropriate state value'''
-        if self._state_machine_time <= (time.time() - 5) and \
-        self._state_machine != 'default':
-            print (self._state_machine, "state expired")
-            self._state_machine = 'default'
-            self._state_machine_time = time.time()
-        return self._state_machine
-    
-    def remove_state_machine(self,value):
-        if value == self.state_machine:
-            print('finished', self.state_machine)
-            self._state_machine = 'default'
-            self._state_machine_time = time.time()
-        else:
-            print(value, 'was not the active state_machine')
 
     def _dev_id_str_to_bytes(self, dev_id_str):
         self._dev_id_hi = int(dev_id_str[0:2], 16)
@@ -799,40 +829,7 @@ class Device(object):
         command = cmd_schema.copy()
         command['name'] = command_name
         message = PLM_Message(self._core, device=self, plm_cmd='insteon_send', dev_cmd=command)
-        self._queue_msg(message, state)
-
-    def _queue_msg(self,message,state):
-        if state == '': state = 'default'
-        if state not in self._msg_queue:
-            self._msg_queue[state] = []
-        self._msg_queue[state].append(message)
-
-    def process_device_queue(self):
-        '''Sends the next message in the queue to the PLM if the state_machine
-        is in the correct state'''
-        next_state = False
-        for state in self._msg_queue:
-            if state != 'default':
-                next_state = state
-                break
-        if self.state_machine != 'default' and \
-        self._msg_queue[self.state_machine]:
-            # Reset state_machine timer
-            self._state_machine_time = time.time()
-            msg = self._msg_queue[self.state_machine].pop(0)
-            self.plm.queue_msg(msg)
-        elif next_state and \
-        self._msg_queue[next_state]:
-            # Set new state_machine timer
-            self._state_machine = next_state
-            self._state_machine_time = time.time()
-            msg = self._msg_queue[self.state_machine].pop(0)
-            self.plm.queue_msg(msg)
-        elif self.state_machine == 'default' and \
-        'default' in self._msg_queue and \
-        self._msg_queue['default']:
-            msg = self._msg_queue['default'].pop(0)
-            self.plm.queue_msg(msg)
+        self._queue_device_msg(message, state)
 
     def _recursive_search_cmd (self,command,search_item):
         unique_cmd = ''

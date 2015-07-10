@@ -152,6 +152,7 @@ PLM_SCHEMA = {
     },
     0x60: {
         'rcvd_len' : (9,),
+        'send_len' : (2,),        
         'name'     : 'plm_info',
         'recv_act' : lambda obj, msg: obj.plm_info(msg),
         'recv_obj' : lambda self : self.core.plm,
@@ -163,6 +164,8 @@ PLM_SCHEMA = {
             'sub_cat'       : 6,
             'firmware'      : 7,
             'plm_resp'      : 8
+        },
+        'send_byte_pos'    : {
         }
     },
     0x61: {
@@ -394,6 +397,8 @@ PLM_SCHEMA = {
             'spare_1'   : 3,
             'spare_2'   : 4,
             'plm_resp'  : 5
+        },
+        'send_byte_pos'    : {
         }
     },
 }
