@@ -130,6 +130,8 @@ PLM_SCHEMA = {
     0x57: {
         'rcvd_len' : (10,),
         'send_len' : (0,),
+        'recv_act' : lambda obj, msg: obj.rcvd_aldb_record(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'all_link_record',
         'recv_byte_pos'    : {
             'link_flags'    : 2,
@@ -305,16 +307,27 @@ PLM_SCHEMA = {
     },
     0x69: {
         'rcvd_len' : (3,),
+        'send_len' : (2,),
+        'recv_act' : lambda obj, msg: obj.rcvd_plm_ack(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'all_link_first_rec',
         'recv_byte_pos'    : {
             'plm_resp'  : 2,
+        },
+        'send_byte_pos'    : {
         }
     },
     0x6A: {
         'rcvd_len' : (3,),
+        'send_len' : (2,),
+        'recv_act' : lambda obj, msg: obj.rcvd_plm_ack(msg),
+        'recv_obj' : lambda self : self.core.plm,
+        'nack_act' : lambda obj, msg: obj.end_of_aldb(msg),
         'name'     : 'all_link_next_rec',
         'recv_byte_pos'    : {
             'plm_resp'  : 2,
+        },
+        'send_byte_pos'    : {
         }
     },
     0x6B: {

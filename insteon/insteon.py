@@ -317,15 +317,30 @@ class PLM(Base_Device):
             if msg.plm_resp_ack:
                 self._last_msg.plm_ack = True
             elif msg.plm_resp_nack:
-                print('PLM sent NACK to last command')
-                self.wait_to_send = time.time() + .5
+                if 'nack_act' in msg.plm_schema:
+                    msg.plm_schema['nack_act'](self, msg)
+                else:
+                    print('PLM sent NACK to last command')
+                    self.wait_to_send = time.time() + .5
             elif msg.plm_resp_bad_cmd:
                 print('PLM said bad command')
                 self.wait_to_send = time.time() + .5
         else:
             print('received spurious plm ack')
-            
-class PLM_Message(Base_Device):
+
+    def rcvd_aldb_record(self,msg):
+        self._aldb.append(msg.raw_msg[2:])
+        self.send_command('all_link_next_rec', 'query_aldb')
+
+    def end_of_aldb(self,msg):
+        self._last_msg.plm_ack = True
+        self.remove_state_machine('query_aldb')
+        print('reached the end of the PLMs ALDB')
+
+    def query_aldb (self):
+        self.send_command('all_link_first_rec', 'query_aldb')
+
+class PLM_Message(object):
     #Initialization Functions
     def __init__(self, core, **kwargs):
         self._core = core
@@ -339,6 +354,10 @@ class PLM_Message(Base_Device):
         if 'is_incomming' in kwargs: self._is_incomming = True
         self.msg_from_raw(**kwargs)
         self.command_to_raw(**kwargs)
+
+    @property
+    def core(self):
+        return self._core
 
     def msg_from_raw(self, **kwargs):
         if 'raw_data' not in kwargs:
