@@ -329,15 +329,31 @@ class PLM(Base_Device):
             print('received spurious plm ack')
 
     def rcvd_aldb_record(self,msg):
-        self._aldb.append(msg.raw_msg[2:])
+        self.add_aldb_to_cache(msg.raw_msg[2:])
         self.send_command('all_link_next_rec', 'query_aldb')
+
+    def add_aldb_to_cache(self,aldb):
+        self._aldb.append(aldb)
 
     def end_of_aldb(self,msg):
         self._last_msg.plm_ack = True
         self.remove_state_machine('query_aldb')
         print('reached the end of the PLMs ALDB')
 
+    def rcvd_all_link_complete(self,msg):
+        if msg.get_byte_by_name('link_code') == 0xFF:
+            #DELETE THINGS
+            pass
+        else:
+            #Fix stupid discrepancy in Insteon spec
+            link_flag = 0xA2
+            if msg.get_byte_by_name('link_code') == 0x01:
+                link_flag = 0xE2
+            self.add_aldb_to_cache(bytearray([link_flag, msg.raw_msg[3:]]))
+
     def query_aldb (self):
+        '''Queries the PLM for a list of the link records saved on
+        the PLM and stores them in the cache'''
         self.send_command('all_link_first_rec', 'query_aldb')
 
 class PLM_Message(object):

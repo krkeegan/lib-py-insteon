@@ -88,6 +88,8 @@ PLM_SCHEMA = {
         'rcvd_len' : (10,),
         'send_len' : (0,),
         'name'     : 'all_link_complete',
+        'recv_act' : lambda obj, msg: obj.rcvd_all_link_complete(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'recv_byte_pos'    : {
             'link_code'     : 2,
             'group'         : 3,
