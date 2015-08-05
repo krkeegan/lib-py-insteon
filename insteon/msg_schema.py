@@ -78,6 +78,8 @@ PLM_SCHEMA = {
     0x52: {
         'rcvd_len' : (4,),
         'send_len' : (0,),
+        'recv_act' : lambda obj, msg: obj.rcvd_x10(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'x10_received',
         'recv_byte_pos'    : {    
             'raw_x10'   : 2,
@@ -104,6 +106,8 @@ PLM_SCHEMA = {
     0x54: {
         'rcvd_len' : (3,),
         'send_len' : (0,),
+        'recv_act' : lambda obj, msg: obj.rcvd_btn_event(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'plm_button_event',
         'recv_byte_pos'    : {    
             'btn_event' : 2,
@@ -112,6 +116,8 @@ PLM_SCHEMA = {
     0x55: {
         'rcvd_len' : (2,),
         'send_len' : (0,),
+        'recv_act' : lambda obj, msg: obj.rcvd_plm_reset(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'user_plm_reset',
         'recv_byte_pos'    : {
             # No other recv_byte_pos
@@ -234,36 +240,21 @@ PLM_SCHEMA = {
             'usr_13'        : 20,
             'usr_14'        : 21,
         },
-        # 'send_byte_pos'    : {
-            # 2:  'to_addr_hi',
-            # 3:  'to_addr_mid',
-            # 4:  'to_addr_low',
-            # 5:  'msg_flags',
-            # 6:  'cmd_1',
-            # 7:  'cmd_2',
-            # 8:  'usr_1',
-            # 9:  'usr_2',
-            # 10: 'usr_3',
-            # 11: 'usr_4',
-            # 12: 'usr_5',
-            # 13: 'usr_6',
-            # 14: 'usr_7',
-            # 15: 'usr_8',
-            # 16: 'usr_9',
-            # 17: 'usr_10',
-            # 18: 'usr_11',
-            # 19: 'usr_12',
-            # 20: 'usr_13',
-            # 21: 'usr_14',
-        # }
     },
     0x63: {
         'rcvd_len' : (5,),
+        'send_len' : (4,),
+        'recv_act' : lambda obj, msg: obj.rcvd_plm_x10_ack(msg),
+        'recv_obj' : lambda self : self.core.plm,
         'name'     : 'x10_send',
         'recv_byte_pos'    : {
             'raw_x10'   : 2,
             'x10_flags' : 3,
             'plm_resp'  : 4,
+        },
+        'send_byte_pos'    : {
+            'raw_x10'   : 2,
+            'x10_flags' : 3,
         }
     },
     0x64: {
@@ -715,6 +706,7 @@ STD_DIRECT_ACK_SCHEMA = {
     ]
 }
 
+# Outgoing message formats
 COMMAND_SCHEMA = {
     #CmdName
     'product_data_request' : [

@@ -33,6 +33,16 @@ class Insteon_Core(object):
         self.devices[device_id] = Device(self, plm, device_id=device_id)
         return self.devices[device_id]
 
+    def add_x10_device(self, address, **kwargs):        
+        #TODO better handle plm, should support multiple plms
+        #We convert the address to its 'byte' value immediately
+        plm = self.plm
+        if 'plm' in kwargs:
+            plm = kwargs['plm']
+        byte_address = HOUSE_TO_BYTE[address[0:1].lower()] | UNIT_TO_BYTE[address[1:2]]
+        self.devices[byte_address] = X10_Device(self, plm, byte_address=byte_address)
+        return self.devices[byte_address]
+
 class Base_Device(object):
     def __init__(self, core, plm):
         self._core = core
@@ -116,6 +126,8 @@ class PLM(Base_Device):
         self._msg_queue = []
         self._wait_to_send = 0
         self._aldb = []
+        self._last_x10_house = ''
+        self._last_x10_unit = ''
         self._serial = serial.Serial(
                     port=port,
                     baudrate=19200,
@@ -328,6 +340,11 @@ class PLM(Base_Device):
         else:
             print('received spurious plm ack')
 
+    def rcvd_plm_x10_ack(self,msg):
+        #For some reason we have to slow down when sending X10 msgs to the PLM
+        self.rcvd_plm_ack(msg)
+        self.wait_to_send = time.time() + .5
+
     def rcvd_aldb_record(self,msg):
         self.add_aldb_to_cache(msg.raw_msg[2:])
         self.send_command('all_link_next_rec', 'query_aldb')
@@ -350,6 +367,38 @@ class PLM(Base_Device):
             if msg.get_byte_by_name('link_code') == 0x01:
                 link_flag = 0xE2
             self.add_aldb_to_cache(bytearray([link_flag, msg.raw_msg[3:]]))
+
+    def rcvd_btn_event(self,msg):
+        print("The PLM Button was pressed")
+        #Currently there is no processing of this event
+
+    def rcvd_plm_reset(self,msg):
+        self._aldb = []
+        print("The PLM was manually reset")
+
+    def rcvd_x10(self,msg):
+        if msg.get_byte_by_name('x10_flags') == 0x00:
+            self.store_x10_address(msg.get_byte_by_name('raw_x10'))
+        else:
+            self._dispatch_x10_cmd(msg)
+
+    def store_x10_address(self,byte):
+        self._last_x10_house = byte & 0b11110000
+        self._last_x10_unit = byte & 0b00001111
+
+    def get_x10_address(self):
+        return self._last_x10_house | self._last_x10_unit
+
+    def _dispatch_x10_cmd(self,msg):
+        if self._last_x10_house == msg.get_byte_by_name('raw_x10') & 0b11110000:
+            try:
+                device = self.core.devices[self.get_x10_address()]
+                device.inc_x10_msg(msg)
+            except KeyError:
+                print('Received and X10 command for an unkown device')
+        else:
+            print("X10 Command House Code did not match expected House Code")
+            print("Message ignored")
 
     def query_aldb (self):
         '''Queries the PLM for a list of the link records saved on
@@ -393,8 +442,16 @@ class PLM_Message(object):
             return
         if not self._initialize_raw_msg(plm_cmd, plm_prefix):
             return
+        self._init_plm_msg(**kwargs)
         self._init_insteon_msg(**kwargs)
         return self
+
+    def _init_plm_msg(self, **kwargs):
+        if 'plm_bytes' in kwargs:
+            plm_bytes = kwargs['plm_bytes']
+            for key in plm_bytes:
+                if key in self.attribute_positions:
+                    self._insert_byte_into_raw(plm_bytes[key],key)
 
     def _init_insteon_msg(self, **kwargs):
         if self.plm_schema['name'] in ['insteon_received', \
@@ -941,4 +998,39 @@ class Device(Base_Device):
 
     def peek_aldb (self):
         self.send_command('peek_one_byte', 'query_aldb')
-        
+
+class X10_Device(Base_Device):
+    def __init__(self, core, plm, **kwargs):
+        super().__init__(core, plm)
+        self.status = ''
+        self._byte_address = kwargs['byte_address']
+
+    def send_command(self, command, state = ''):
+        if command.lower() in CMD_TO_BYTE:
+            if state == '':
+                state = command
+            plm_bytes = {'raw_x10':self._byte_address, 'x10_flags':0x00}
+            message = PLM_Message(self.core, device=self, plm_cmd='x10_send', plm_bytes=plm_bytes)
+            self._queue_device_msg(message, state)
+            self.plm.store_x10_address(self._byte_address)
+            plm_bytes = {
+                'raw_x10':self.house_byte | CMD_TO_BYTE[command.lower()], 
+                'x10_flags':0x80
+            }
+            message = PLM_Message(self.core, device=self, plm_cmd='x10_send', plm_bytes=plm_bytes)
+            self._queue_device_msg(message, state)
+            self.status = command.lower()
+        else:
+            print("Unrecognized command " , command)
+
+    @property
+    def house_byte(self):
+        return self._byte_address & 0b11110000
+
+    def inc_x10_msg(self,msg):
+        x10_cmd_code = msg.get_byte_by_name('raw_x10') & 0b00001111
+        for cmd_name, value in CMD_TO_BYTE.items():
+            if value == x10_cmd_code:
+                break
+        self.status = cmd_name;
+        print('received X10 message, setting to state ', self.status)
