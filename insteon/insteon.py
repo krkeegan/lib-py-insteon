@@ -336,8 +336,8 @@ class PLM(Base_Device):
             self.sub_cat = msg_obj.get_byte_by_name('sub_cat')
             self.firmware = msg_obj.get_byte_by_name('firmware')
 
-    def send_command(self,command, state = ''):
-        message = PLM_Message(self.core, device=self, plm_cmd=command)
+    def send_command(self,command, state = '', plm_bytes = {}):
+        message = PLM_Message(self.core, device=self, plm_cmd=command, plm_bytes=plm_bytes)
         self._queue_device_msg(message, state)
 
     def process_unacked_msg(self):
@@ -684,6 +684,9 @@ class Insteon_Message(object):
             self._device = kwargs['device']
         if 'dev_cmd' in kwargs:
             self._construct_insteon_send(kwargs['dev_cmd'])
+        if 'dev_bytes' in kwargs:
+            for name, byte in kwargs['dev_bytes'].items():
+                self._parent._insert_byte_into_raw(byte, name)
 
     def _construct_insteon_send(self,dev_cmd):
         msg_flags = self._construct_msg_flags(dev_cmd)
@@ -988,7 +991,7 @@ class Device(Base_Device):
         expire_time = time.time() + (total_delay / 1000)
         self._recent_inc_msgs[search_key] = expire_time
 
-    def send_command(self, command_name, state = ''):
+    def send_command(self, command_name, state = '', dev_bytes = {}):
         try:
             cmd_schema = COMMAND_SCHEMA[command_name]
         except Exception as e:
@@ -1006,7 +1009,7 @@ class Device(Base_Device):
                 return False
         command = cmd_schema.copy()
         command['name'] = command_name
-        message = PLM_Message(self._core, device=self, plm_cmd='insteon_send', dev_cmd=command)
+        message = PLM_Message(self._core, device=self, plm_cmd='insteon_send', dev_cmd=command, dev_bytes=dev_bytes)
         self._queue_device_msg(message, state)
 
     def _recursive_search_cmd (self,command,search_item):
