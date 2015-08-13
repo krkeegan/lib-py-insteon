@@ -358,6 +358,11 @@ class PLM(Base_Device):
                     msg.plm_retry += 1
                     self._resend_msg()
             return
+        if msg.seq_lock == True: 
+            if msg.time_sent < time.time() - msg.seq_time:
+                print(now, 'PLM sequence lock expired, moving on')
+                msg.seq_lock = False
+            return
         if msg.insteon_msg and msg.insteon_msg.device_ack == False:
             total_hops = msg.insteon_msg.max_hops *2
             hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
@@ -401,7 +406,9 @@ class PLM(Base_Device):
     def _is_ack_pending(self):
         ret = False
         if self._last_msg and not self._last_msg.failed:
-            if not self._last_msg.plm_ack:
+            if self._last_msg.seq_lock:
+                ret = True
+            elif not self._last_msg.plm_ack:
                 ret = True
             elif self._last_msg.insteon_msg and \
             not self._last_msg.insteon_msg.device_ack:
@@ -483,7 +490,7 @@ class PLM(Base_Device):
                 device = self.core.devices[self.get_x10_address()]
                 device.inc_x10_msg(msg)
             except KeyError:
-                print('Received and X10 command for an unkown device')
+                print('Received and X10 command for an unknown device')
         else:
             print("X10 Command House Code did not match expected House Code")
             print("Message ignored")
@@ -493,17 +500,70 @@ class PLM(Base_Device):
         the PLM and stores them in the cache'''
         self.send_command('all_link_first_rec', 'query_aldb')
 
+    def send_group_cmd(self,group,cmd):
+        '''Send an on/off command from a plm group'''
+        plm_bytes = {
+            'group'     : group,
+            'cmd_1'     : cmd,
+            'cmd_2'     : 0x00,
+        }
+        message = PLM_Message(self.core, device=self, plm_cmd='all_link_send', plm_bytes=plm_bytes)
+        #Until all link status is complete, sending any other cmds to PLM
+        #will cause it to abandon all link process
+        message.seq_lock = True
+        #TODO Calculate sequence lock time based on number of items in group
+        message.seq_time = 5
+        #Queue up indiv device cleanup messages
+        self._queue_device_msg(message, 'all_link_send')
+        records = self._aldb.search_for_records({
+            'controller' : True,
+            'group': group,
+            'in_use': True
+        })
+        for position in records:
+            linked_device = self._aldb.linked_device(position)
+            # Queue a cleanup message on each device, this msg will
+            # be cleared from the queue on receipt of a cleanup
+            # ack
+            ##TESTING ONLY, need to pick on or off
+            linked_device.send_command('off_cleanup', '', {'cmd_2' : group})
+
+    def rcvd_all_link_clean_status(self,msg):
+        if self._last_msg.plm_cmd_type == 'all_link_send':
+            self._last_msg.seq_lock = False
+            if msg.plm_resp_ack:
+                print('Send All Link - Success')
+                self.remove_state_machine('all_link_send')
+                #TODO do we update the device state here? or rely on arrival of
+                #alllink_cleanup acks?  As it stands, our own alllink cleanups
+                #will be sent if this msg is rcvd, but no official device alllink
+                #cleanup arrives
+            elif msg.plm_resp_nack:
+                print('Send All Link - Error')
+                #We don't remove the state machine, so that further
+                #direct cleanups can use it
+        else:
+            print('Ignored spurious all link clean status')
+
+    def rcvd_all_link_clean_failed(self,msg):
+        print('A specific device faileled to ack the cleanup msg')
+        #TODO ensure that this is marked as false in item list
+
 class PLM_Message(object):
     #Initialization Functions
     def __init__(self, core, **kwargs):
         self._core = core
         self._plm_ack = False
+        self._seq_time = 0
+        self._seq_lock = False
         self._is_incomming = False
         self._plm_retry = 0
         self._failed = False
         self._plm_schema = {}
         self._raw_msg = bytes()
         self._insteon_msg = {}
+        self._creation_time = time.time()
+        self._time_sent = 0
         if 'is_incomming' in kwargs: self._is_incomming = True
         self.msg_from_raw(**kwargs)
         self.command_to_raw(**kwargs)
@@ -511,6 +571,18 @@ class PLM_Message(object):
     @property
     def core(self):
         return self._core
+
+    @property
+    def creation_time(self):
+        return self._creation_time
+
+    @property
+    def time_sent(self):
+        return self._time_sent
+
+    @time_sent.setter
+    def time_sent(self,value):
+        self._time_sent = value
 
     def msg_from_raw(self, **kwargs):
         if 'raw_data' not in kwargs:
@@ -671,6 +743,22 @@ class PLM_Message(object):
     @property
     def insteon_msg(self):
         return self._insteon_msg
+
+    @property
+    def seq_lock(self):
+        return self._seq_lock
+
+    @seq_lock.setter
+    def seq_lock(self,boolean):
+        self._seq_lock = boolean
+
+    @property
+    def seq_time(self):
+        return self._seq_time
+
+    @seq_time.setter
+    def seq_time(self,int):
+        self._seq_time = int
 
 class Insteon_Message(object):
     def __init__(self, parent, **kwargs):
