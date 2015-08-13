@@ -20,9 +20,6 @@ class Insteon_Core(object):
         handled by the Insteon Core'''
         self.plm.process_input()
         self.plm.process_unacked_msg()
-        for id, device in self.devices.items():
-            device.process_device_queue()
-        self.plm.process_device_queue()
         self.plm.process_queue()
 
     def add_device(self, device_id, **kwargs):
@@ -70,13 +67,28 @@ class Base_Device(object):
         will automatically be eliminated if it has not been updated within 5 seconds.
         You can update a state by setting the state machine to the same value again or
         sending a command with the appropriate state value'''
-        if self._state_machine_time <= (time.time() - 5) and \
-        self._state_machine != 'default':
-            print (self._state_machine, "state expired")
-            self._state_machine = 'default'
-            self._state_machine_time = time.time()
+        if self._state_machine_time <= (time.time() - 5) or \
+        self._state_machine == 'default':
+            #Always check for states other than default
+            if self._state_machine != 'default':
+                print (self._state_machine, "state expired")
+                pprint.pprint(self._device_msg_queue)
+            self._state_machine = self._get_next_state_machine()
+            if self._state_machine != 'default':
+                self._state_machine_time = time.time()
         return self._state_machine
-    
+
+    def _get_next_state_machine(self):
+        next_state = 'default'
+        msg_time = 0
+        for state in self._device_msg_queue:
+            if state != 'default' and self._device_msg_queue[state]:
+                test_time = self._device_msg_queue[state][0].creation_time
+                if test_time and (msg_time == 0 or test_time < msg_time):
+                    next_state = state
+                    msg_time = test_time
+        return next_state
+
     def remove_state_machine(self,value):
         if value == self.state_machine:
             print('finished', self.state_machine)
@@ -91,24 +103,13 @@ class Base_Device(object):
             self._device_msg_queue[state] = []
         self._device_msg_queue[state].append(message)
 
-    def process_device_queue(self):
-        '''Sends the next message in the queue to the PLM if the state_machine
-        is in the correct state'''
-        next_state = False
-        for state in self._device_msg_queue:
-            if state != 'default':
-                next_state = state
-                break
-        if self.state_machine != 'default' and \
+    def pop_device_queue(self):
+        '''Returns and removes the next message in the queue'''
+        ret = None
+        if self.state_machine in self._device_msg_queue and \
         self._device_msg_queue[self.state_machine]:
-            # Reset state_machine timer
-            self._state_machine_time = time.time()
-            msg = self._device_msg_queue[self.state_machine].pop(0)
-            self.plm.queue_msg(msg)
-        elif next_state and \
-        self._device_msg_queue[next_state]:
-            # Set new state_machine timer
-            self._state_machine = next_state
+            ret = self._device_msg_queue[self.state_machine].pop(0)
+            self._update_message_history(ret)
             self._state_machine_time = time.time()
             msg = self._device_msg_queue[self.state_machine].pop(0)
             self.plm.queue_msg(msg)
@@ -290,7 +291,7 @@ class PLM(Base_Device):
             hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
             # These numbers come from real world use (87, 183)
             # 100ms for device to process the msg internally
-            total_delay = total_hops * hop_delay + (100/1000)
+            total_delay = (total_hops * hop_delay/1000) + (100/1000)
             if msg.time_sent < time.time() - total_delay:
                 print(now, 'device failed to ack a message, total delay =', total_delay, 'total hops=', total_hops)
                 if msg.insteon_msg.device_retry >= 3:
@@ -302,16 +303,28 @@ class PLM(Base_Device):
             return
 
     def process_queue(self):
-        '''Sends the next message in the queue if there are no 
-        conflicts'''
+        '''Loops through all of the devices and sends the 
+        oldest message currently waiting in a device queue
+        if there are no other conflicts'''
         if not self._is_ack_pending() and \
-        self._msg_queue and \
         time.time() > self.wait_to_send:
-            msg = self._msg_queue.pop(0)
-            if msg.insteon_msg:
-                device = msg.insteon_msg.device
-                device.last_msg = msg
-            self._send_msg(msg)
+            devices = [self,]
+            msg_time = 0
+            sending_device = False
+            for id, device in self.core.devices.items():
+                devices.append(device)
+            for device in devices:
+                dev_msg_time = device.next_msg_create_time()
+                if dev_msg_time and (msg_time == 0 or dev_msg_time < msg_time):
+                    sending_device = device
+                    msg_time = dev_msg_time
+            if sending_device:
+                dev_msg = sending_device.pop_device_queue()
+                if dev_msg:
+                    if dev_msg.insteon_msg:
+                        device = dev_msg.insteon_msg.device
+                        device.last_msg = dev_msg
+                    self._send_msg(dev_msg)
 
     def _is_ack_pending(self):
         ret = False
@@ -777,11 +790,10 @@ class Device(Base_Device):
     def dev_id_low(self):
         return self._dev_id_low
 
-    def std_msg_rcvd(self,msg):
+    def msg_rcvd(self,msg):
         if self._is_duplicate(msg):
             print ('Skipped duplicate msg')
             return
-        # TODO add something to weed out unexpected ACKs
         if msg.insteon_msg.message_type == 'direct_ack':
             self._process_direct_ack(msg)
         elif msg.insteon_msg.message_type == 'broadcast':
