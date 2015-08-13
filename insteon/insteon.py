@@ -40,6 +40,72 @@ class Insteon_Core(object):
         self.devices[byte_address] = X10_Device(self, plm, byte_address=byte_address)
         return self.devices[byte_address]
 
+class ALDB(object):
+    def __init__(self, parent):
+        self._parent = parent
+        self._aldb = {}
+
+    def edit_dev_record(self,position,record):
+        self._aldb[position] = record
+
+    def get_record(self,position):
+        return self._aldb[position]
+
+    def get_all_records(self):
+        return self._aldb.copy()
+
+    def clear_all_records(self):
+        self._aldb = {}
+
+    def edit_dev_record_byte(self,aldb_pos,byte_pos,byte):
+        self._aldb[aldb_pos][byte_pos] = byte
+
+    def add_plm_record(self,record):
+        position = len(self._aldb) + 1
+        self._aldb[position] = record
+
+    def search_for_records(self,attributes):
+        '''Performs an AND search for records on this device'''
+        ret = []
+        for position, record in self._aldb.items():
+            parsed_record = self.parse_record(position)
+            ret.append(position)
+            for attribute, value in attributes.items():
+                if parsed_record[attribute] != value:
+                    ret.remove(position)
+                    break
+        return ret
+        
+    def parse_record(self,position):
+        bytes = self._aldb[position]
+        parsed = {
+            'record_flag' : bytes[0],
+            'in_use'    :  bytes[0] & 0b10000000,
+            'controller':  bytes[0] & 0b01000000,
+            'responder' : ~bytes[0] & 0b01000000,
+            'highwater' : ~bytes[0] & 0b00000010,
+            'group' : bytes[1],
+            'dev_hi' : bytes[2],
+            'dev_mid' : bytes[3],
+            'dev_low' : bytes[4],
+            'data_1' : bytes[5],
+            'data_2' : bytes[6],
+            'data_3' : bytes[7],
+        }
+        for attr in ('in_use','controller','responder','highwater'):
+            if parsed[attr]:
+                parsed[attr] = True
+            else:
+                parsed[attr] = False
+        return parsed
+
+    def linked_device(self,position):
+        parsed_record = self.parse_record(position)
+        high = parsed_record['dev_hi']
+        mid = parsed_record['dev_mid']
+        low = parsed_record['dev_low']
+        return self._parent.core.devices[BYTE_TO_ID(high,mid,low)]
+
 class Base_Device(object):
     def __init__(self, core, plm):
         self._core = core
@@ -126,7 +192,6 @@ class PLM(Base_Device):
         self._last_msg = ''
         self._msg_queue = []
         self._wait_to_send = 0
-        self._aldb = []
         self._last_x10_house = ''
         self._last_x10_unit = ''
         self._serial = serial.Serial(
@@ -363,12 +428,15 @@ class PLM(Base_Device):
         self.send_command('all_link_next_rec', 'query_aldb')
 
     def add_aldb_to_cache(self,aldb):
-        self._aldb.append(aldb)
+        self._aldb.add_plm_record(aldb)
 
     def end_of_aldb(self,msg):
         self._last_msg.plm_ack = True
         self.remove_state_machine('query_aldb')
         print('reached the end of the PLMs ALDB')
+        records = self._aldb.get_all_records()
+        for key in sorted(records):
+            print (key, ":", BYTE_TO_HEX(records[key]))
 
     def rcvd_all_link_complete(self,msg):
         if msg.get_byte_by_name('link_code') == 0xFF:
@@ -386,7 +454,7 @@ class PLM(Base_Device):
         #Currently there is no processing of this event
 
     def rcvd_plm_reset(self,msg):
-        self._aldb = []
+        self._aldb.clear_all_records()
         print("The PLM was manually reset")
 
     def rcvd_x10(self,msg):
@@ -757,7 +825,6 @@ class Device(Base_Device):
         self.status = ''
         self._msb = ''
         self._lsb = ''
-        self.aldb = {}
         self._recent_inc_msgs = {}
         self._hop_array = []
 
@@ -972,12 +1039,17 @@ class Device(Base_Device):
         if self.state_machine == 'query_aldb' and \
            self.last_msg.insteon_msg.device_cmd_name == 'peek_one_byte':
             if (self.lsb % 8) == 0:
-                self.aldb[self._get_aldb_key()] = bytearray(8)
-            self.aldb[self._get_aldb_key()][self.lsb % 8] = msg.get_byte_by_name('cmd_2')
+                self._aldb.edit_dev_record(self._get_aldb_key(),bytearray(8))
+            self._aldb.edit_dev_record_byte(
+                self._get_aldb_key(),
+                self.lsb % 8, 
+                msg.get_byte_by_name('cmd_2')
+            )
             if self.is_last_aldb(self._get_aldb_key()):
                 #this is the last entry on this device
-                for key in sorted(self.aldb):
-                    print (key, ":", BYTE_TO_HEX(self.aldb[key]))
+                records = self._aldb.get_all_records()
+                for key in sorted(records):
+                    print (key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
             elif self.is_empty_aldb(self._get_aldb_key()):
                 #this is an empty record
@@ -998,13 +1070,13 @@ class Device(Base_Device):
 
     def is_last_aldb(self,key):
         ret = True
-        if self.aldb[key][0] & 0b00000010:
+        if self._aldb.get_record(key)[0] & 0b00000010:
             ret = False
         return ret
 
     def is_empty_aldb(self,key):
         ret = True
-        if self.aldb[key][0] & 0b10000000:
+        if self._aldb.get_record(key)[0] & 0b10000000:
             ret = False
         return ret
 
