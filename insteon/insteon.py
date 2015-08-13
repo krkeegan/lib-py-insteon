@@ -180,13 +180,66 @@ class Base_Device(object):
             ret = self._device_msg_queue[self.state_machine].pop(0)
             self._update_message_history(ret)
             self._state_machine_time = time.time()
-            msg = self._device_msg_queue[self.state_machine].pop(0)
-            self.plm.queue_msg(msg)
-        elif self.state_machine == 'default' and \
-        'default' in self._device_msg_queue and \
-        self._device_msg_queue['default']:
-            msg = self._device_msg_queue['default'].pop(0)
-            self.plm.queue_msg(msg)
+        return ret
+
+    def next_msg_create_time(self):
+        '''Returns the creation time of the message to be sent in the queue'''
+        ret = None
+        if self.state_machine in self._device_msg_queue and \
+        self._device_msg_queue[self.state_machine]:
+            ret = self._device_msg_queue[self.state_machine][0].creation_time
+        return ret
+
+    def add_group(self,number):
+        self._groups[number] = Group(self)
+
+    def _update_message_history(self,msg):
+        # Remove old messages first
+        archive_time = time.time() - 120
+        last_msg_to_del = 0
+        for msg in self._out_history:
+            if msg.time_sent < archive_time:
+                last_msg_to_del += 1
+            else:
+                break
+        if last_msg_to_del:
+            del self._out_history[0:last_msg_to_del]
+        # Add this message onto the end
+        self._out_history.append(msg)
+
+    def search_last_sent_msg(self,**kwargs):
+        '''Return the most recently sent message of this type
+        plm_cmd or insteon_cmd'''
+        ret = None
+        if 'plm_cmd' in kwargs:
+            for msg in reversed(self._out_history):
+                if msg.plm_cmd_type == kwargs['plm_cmd']:
+                    ret = msg
+                    break
+        elif 'insteon_cmd' in kwargs:
+            for msg in reversed(self._out_history):
+                if msg.insteon_msg and \
+                msg.device_cmd_name == kwargs['insteon_cmd']:
+                    ret = msg
+                    break
+        return ret
+
+class Group(object):
+    def __init__(self, parent):
+        self._parent = parent
+        self._attributes = {}
+
+    @property
+    def attribute(self,attr):
+        try:
+            ret = self._attribute[attr]
+        except KeyError:
+            ret = None
+        return ret
+
+    @attribute.setter
+    def attribute(self,attr,value):
+        self._attribute[attr] = value
 
 class PLM(Base_Device):
     def __init__(self, port, core):
@@ -967,6 +1020,29 @@ class Device(Base_Device):
             self.sub_cat = msg.get_byte_by_name('to_addr_mid')
             self.firmware = msg.get_byte_by_name('to_addr_low')
             print('was broadcast')
+        elif msg.insteon_msg.message_type == 'alllink_cleanup_ack':
+            #TODO set state of the device based on cmd acked
+            # Clear queued cleanup messages if they exist
+            self._remove_cleanup_msgs(msg)
+            if self.last_msg and \
+            self.last_msg.get_byte_by_name('cmd_1') == msg.get_byte_by_name('cmd_1') and \
+            self.last_msg.get_byte_by_name('cmd_2') == msg.get_byte_by_name('cmd_2'):
+                #Only set ack if this was sent by this device
+                self.last_msg.insteon_msg.device_ack = True
+
+    def _remove_cleanup_msgs(self,msg):
+        cmd_1 = msg.get_byte_by_name('cmd_1')
+        cmd_2 = msg.get_byte_by_name('cmd_2')
+        for state, msgs in self._device_msg_queue.items():
+            i = 0
+            to_delete = []
+            for msg in msgs:
+                if msg.get_byte_by_name('cmd_1') == cmd_1 and \
+                msg.get_byte_by_name('cmd_2') == cmd_2:
+                    to_delete.append(i)
+                i += 1
+            for position in reversed(to_delete):
+                del self._device_msg_queue[state][position]
 
     def _process_direct_ack(self,msg):
         '''processes an incomming direct ack message'''
