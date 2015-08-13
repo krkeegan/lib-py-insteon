@@ -230,7 +230,7 @@ class PLM(Base_Device):
             if self._read_buffer.startswith(wait_prefix):
                 # TODO need to slow down PLM sending
                 print ('need to slow down!!', BYTE_TO_HEX(self._read_buffer))
-                self.wait_to_send = time.time() + .5
+                self.wait_to_send = .5
                 del self._read_buffer[0:1]
                 self._advance_to_msg_start()
 
@@ -271,12 +271,14 @@ class PLM(Base_Device):
 
     @wait_to_send.setter
     def wait_to_send(self,value):
-        self._wait_to_send = value
+        if self._wait_to_send < time.time():
+            self._wait_to_send = time.time()
+        self._wait_to_send += value
 
     def process_inc_msg(self,raw_msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
         # No matter what, pause for a short period before sending to PLM
-        self.wait_to_send = time.time() + (20/1000)
+        self.wait_to_send = (20/1000)
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
         msg = PLM_Message(self.core, \
                               raw_data = raw_msg, 
@@ -411,17 +413,17 @@ class PLM(Base_Device):
                     msg.plm_schema['nack_act'](self, msg)
                 else:
                     print('PLM sent NACK to last command')
-                    self.wait_to_send = time.time() + .5
+                    self.wait_to_send = .5
             elif msg.plm_resp_bad_cmd:
                 print('PLM said bad command')
-                self.wait_to_send = time.time() + .5
+                self.wait_to_send = .5
         else:
             print('received spurious plm ack')
 
     def rcvd_plm_x10_ack(self,msg):
         #For some reason we have to slow down when sending X10 msgs to the PLM
         self.rcvd_plm_ack(msg)
-        self.wait_to_send = time.time() + .5
+        self.wait_to_send = .5
 
     def rcvd_aldb_record(self,msg):
         self.add_aldb_to_cache(msg.raw_msg[2:])
@@ -938,7 +940,7 @@ class Device(Base_Device):
             #of the prior message with +1 hops, as if the PLM ACK was never
             #received by the device
             total_delay += hop_delay * (msg.insteon_msg.max_hops + 1) * 2
-        expire_time = time.time() + (total_delay / 1000)
+        expire_time = (total_delay / 1000)
         self.plm.wait_to_send = expire_time
 
     def _is_duplicate(self,msg):
