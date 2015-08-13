@@ -113,6 +113,9 @@ class Base_Device(object):
         self._state_machine = 'default'
         self._state_machine_time = 0
         self._device_msg_queue = {}
+        self._groups = {}
+        self._out_history = []
+        self._aldb = ALDB(self)
 
     @property
     def core(self):
@@ -202,6 +205,8 @@ class PLM(Base_Device):
                     bytesize=serial.EIGHTBITS,
                     timeout=0
                     )
+        for number in range(0x01,0xFF):
+            self.add_group(number)
 
     def _read(self):
         '''Reads bytes from PLM and loads them into a buffer'''
