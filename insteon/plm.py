@@ -16,14 +16,17 @@ class PLM(Base_Device):
         self._wait_to_send = 0
         self._last_x10_house = ''
         self._last_x10_unit = ''
-        self._serial = serial.Serial(
-                    port=port,
-                    baudrate=19200,
-                    parity=serial.PARITY_NONE,
-                    stopbits=serial.STOPBITS_ONE,
-                    bytesize=serial.EIGHTBITS,
-                    timeout=0
-                    )
+        if port != 'test_fixture':
+            self._serial = serial.Serial(
+                        port=port,
+                        baudrate=19200,
+                        parity=serial.PARITY_NONE,
+                        stopbits=serial.STOPBITS_ONE,
+                        bytesize=serial.EIGHTBITS,
+                        timeout=0
+                        )
+        else:
+            self._serial = 'test_fixture'
         for number in range(0x01,0xFF):
             self.add_group(number)
 
