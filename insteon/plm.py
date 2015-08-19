@@ -47,7 +47,8 @@ class PLM(Base_Device):
             good_prefix = bytes.fromhex('02')
             wait_prefix = bytes.fromhex('15')
             if not self._read_buffer.startswith((good_prefix,wait_prefix)):
-                print('Removed bad starting string from', BYTE_TO_HEX(self._read_buffer))
+                print('Removed bad starting string from', BYTE_TO_HEX(
+                    self._read_buffer))
                 index = self._read_buffer.find(good_prefix)
                 del self._read_buffer[0:index]
                 print('resulting buffer is', BYTE_TO_HEX(self._read_buffer))
@@ -81,7 +82,8 @@ class PLM(Base_Device):
                     del self._read_buffer[0:msg_length]
                 else:
                     pass
-                    #print('need more data',BYTE_TO_HEX(self._read_buffer)) # Need to read more data from PLM
+                    #print('need more data',BYTE_TO_HEX(self._read_buffer)) 
+                    # Need to read more data from PLM
             else:
                 # TODO handle this
                 print("error, I don't know this prefix")
@@ -156,7 +158,9 @@ class PLM(Base_Device):
             self.firmware = msg_obj.get_byte_by_name('firmware')
 
     def send_command(self,command, state = '', plm_bytes = {}):
-        message = PLM_Message(self.core, device=self, plm_cmd=command, plm_bytes=plm_bytes)
+        message = PLM_Message(
+            self.core, device=self, 
+            plm_cmd=command, plm_bytes=plm_bytes)
         self._queue_device_msg(message, state)
 
     def process_unacked_msg(self):
@@ -189,9 +193,14 @@ class PLM(Base_Device):
             # 100ms for device to process the msg internally
             total_delay = (total_hops * hop_delay/1000) + (100/1000)
             if msg.time_sent < time.time() - total_delay:
-                print(now, 'device failed to ack a message, total delay =', total_delay, 'total hops=', total_hops)
+                print(
+                    now, 
+                    'device failed to ack a message, total delay =', 
+                    total_delay, 'total hops=', total_hops)
                 if msg.insteon_msg.device_retry >= 3:
-                    print(now, 'device retries exceeded, abandoning this message')
+                    print(
+                        now, 
+                        'device retries exceeded, abandoning this message')
                     msg.failed = True
                 else:
                     msg.insteon_msg.device_retry += 1
@@ -304,7 +313,8 @@ class PLM(Base_Device):
         return self._last_x10_house | self._last_x10_unit
 
     def _dispatch_x10_cmd(self,msg):
-        if self._last_x10_house == msg.get_byte_by_name('raw_x10') & 0b11110000:
+        if (self._last_x10_house == 
+                msg.get_byte_by_name('raw_x10') & 0b11110000):
             try:
                 device = self.core.devices[self.get_x10_address()]
                 device.inc_x10_msg(msg)
@@ -326,7 +336,10 @@ class PLM(Base_Device):
             'cmd_1'     : cmd,
             'cmd_2'     : 0x00,
         }
-        message = PLM_Message(self.core, device=self, plm_cmd='all_link_send', plm_bytes=plm_bytes)
+        message = PLM_Message(self.core, 
+                              device=self, 
+                              plm_cmd='all_link_send', 
+                              plm_bytes=plm_bytes)
         #Until all link status is complete, sending any other cmds to PLM
         #will cause it to abandon all link process
         message.seq_lock = True
@@ -355,8 +368,8 @@ class PLM(Base_Device):
                 self.remove_state_machine('all_link_send')
                 #TODO do we update the device state here? or rely on arrival of
                 #alllink_cleanup acks?  As it stands, our own alllink cleanups
-                #will be sent if this msg is rcvd, but no official device alllink
-                #cleanup arrives
+                #will be sent if this msg is rcvd, but no official device
+                #alllink cleanup arrives
             elif msg.plm_resp_nack:
                 print('Send All Link - Error')
                 #We don't remove the state machine, so that further

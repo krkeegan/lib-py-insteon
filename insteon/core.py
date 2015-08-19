@@ -26,7 +26,9 @@ class Insteon_Core(object):
         plm = self.plm
         if 'plm' in kwargs:
             plm = kwargs['plm']
-        self.devices[device_id] = Insteon_Device(self, plm, device_id=device_id)
+        self.devices[device_id] = Insteon_Device(self, 
+                                                 plm, 
+                                                 device_id=device_id)
         return self.devices[device_id]
 
     def add_x10_device(self, address, **kwargs):        
@@ -35,6 +37,9 @@ class Insteon_Core(object):
         plm = self.plm
         if 'plm' in kwargs:
             plm = kwargs['plm']
-        byte_address = HOUSE_TO_BYTE[address[0:1].lower()] | UNIT_TO_BYTE[address[1:2]]
-        self.devices[byte_address] = X10_Device(self, plm, byte_address=byte_address)
+        byte_address = (
+            HOUSE_TO_BYTE[address[0:1].lower()] | UNIT_TO_BYTE[address[1:2]])
+        self.devices[byte_address] = X10_Device(self, 
+                                                plm, 
+                                                byte_address=byte_address)
         return self.devices[byte_address]

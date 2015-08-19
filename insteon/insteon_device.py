@@ -31,7 +31,9 @@ class Insteon_Device(Base_Device):
 
     @property
     def device_id_str(self):
-        return BYTE_TO_HEX(bytes([self._dev_id_hi,self._dev_id_mid,self._dev_id_low]))
+        ret = BYTE_TO_HEX(
+            bytes([self._dev_id_hi,self._dev_id_mid,self._dev_id_low]))
+        return ret
 
     def _dev_id_str_to_bytes(self, dev_id_str):
         self._dev_id_hi = int(dev_id_str[0:2], 16)
@@ -66,9 +68,11 @@ class Insteon_Device(Base_Device):
             #TODO set state of the device based on cmd acked
             # Clear queued cleanup messages if they exist
             self._remove_cleanup_msgs(msg)
-            if self.last_msg and \
-            self.last_msg.get_byte_by_name('cmd_1') == msg.get_byte_by_name('cmd_1') and \
-            self.last_msg.get_byte_by_name('cmd_2') == msg.get_byte_by_name('cmd_2'):
+            if (self.last_msg and 
+                    self.last_msg.get_byte_by_name('cmd_1') == 
+                    msg.get_byte_by_name('cmd_1') and 
+                    self.last_msg.get_byte_by_name('cmd_2') == 
+                    msg.get_byte_by_name('cmd_2')):
                 #Only set ack if this was sent by this device
                 self.last_msg.insteon_msg.device_ack = True
 
@@ -92,7 +96,8 @@ class Insteon_Device(Base_Device):
         self._add_to_hop_tracking(msg)
         if not self._is_valid_direct_ack(msg):
             return
-        elif self.last_msg.insteon_msg.device_cmd_name == 'light_status_request':
+        elif (self.last_msg.insteon_msg.device_cmd_name == 
+                'light_status_request'):
             print('was status response')
             self._aldb_delta = msg.get_byte_by_name('cmd_1')
             self.status = msg.get_byte_by_name('cmd_2')
@@ -112,7 +117,8 @@ class Insteon_Device(Base_Device):
                     return
             command(self,msg)
             self.last_msg.insteon_msg.device_ack = True
-        elif self.last_msg.get_byte_by_name('cmd_1') == msg.get_byte_by_name('cmd_1'):
+        elif (self.last_msg.get_byte_by_name('cmd_1') == 
+                msg.get_byte_by_name('cmd_1')):
             print('rcvd un coded ack')
             self.last_msg.insteon_msg.device_ack = True
         else:
@@ -215,7 +221,11 @@ class Insteon_Device(Base_Device):
                 return False
         command = cmd_schema.copy()
         command['name'] = command_name
-        message = PLM_Message(self._core, device=self, plm_cmd='insteon_send', dev_cmd=command, dev_bytes=dev_bytes)
+        message = PLM_Message(self._core, 
+                              device=self, 
+                              plm_cmd='insteon_send', 
+                              dev_cmd=command, 
+                              dev_bytes=dev_bytes)
         self._queue_device_msg(message, state)
 
     def _recursive_search_cmd (self,command,search_item):

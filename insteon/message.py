@@ -234,11 +234,15 @@ class Insteon_Message(object):
         msg_flags = self._construct_msg_flags(dev_cmd)
         self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
         self._parent._insert_byte_into_raw(self.device.dev_id_hi,'to_addr_hi')
-        self._parent._insert_byte_into_raw(self.device.dev_id_mid,'to_addr_mid')
-        self._parent._insert_byte_into_raw(self.device.dev_id_low,'to_addr_low')
+        self._parent._insert_byte_into_raw(
+            self.device.dev_id_mid,'to_addr_mid')
+        self._parent._insert_byte_into_raw(
+            self.device.dev_id_low,'to_addr_low')
         # Process functions if they exist
-        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 'usr_3', 'usr_4', 'usr_5', 'usr_6',
-         'usr_7', 'usr_8', 'usr_9', 'usr_10', 'usr_11', 'usr_12', 'usr_13', 'usr_14')
+        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 
+                'usr_3', 'usr_4', 'usr_5', 'usr_6',
+                'usr_7', 'usr_8', 'usr_9', 'usr_10', 
+                'usr_11', 'usr_12', 'usr_13', 'usr_14')
         #could shorten this by just searching for callable keys in command
         for key in keys:
             if key in dev_cmd and callable(dev_cmd[key]):

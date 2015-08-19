@@ -64,4 +64,7 @@ def BYTE_TO_HEX(data):
     return binascii.hexlify(data).decode().upper()
 
 def BYTE_TO_ID(high, mid, low):
-    return '{:02x}'.format(high, 'x').upper() + '{:02x}'.format(mid, 'x').upper() + '{:02x}'.format(low, 'x').upper() 
+    ret = ('{:02x}'.format(high, 'x').upper() + 
+           '{:02x}'.format(mid, 'x').upper() + 
+           '{:02x}'.format(low, 'x').upper())
+    return ret 

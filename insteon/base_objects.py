@@ -89,15 +89,18 @@ class Base_Device(object):
 
     @property
     def state_machine(self):
-        '''The state machine tracks the 'state' that the device is in. This is necessary
-        because Insteon is not a stateless protocol, interpreting some incoming messages
-        requires knowing what commands were previously issued to the device.
+        '''The state machine tracks the 'state' that the device is in. 
+        This is necessary because Insteon is not a stateless protocol, 
+        interpreting some incoming messages requires knowing what 
+        commands were previously issued to the device.
         
-        Whenever a state is set, only messages of that state will be sent to the device,
-        all other messages will wait in a queue.  To avoid locking up a device, a state
-        will automatically be eliminated if it has not been updated within 5 seconds.
-        You can update a state by setting the state machine to the same value again or
-        sending a command with the appropriate state value'''
+        Whenever a state is set, only messages of that state will be 
+        sent to the device, all other messages will wait in a queue.  
+        To avoid locking up a device, a state will automatically be 
+        eliminated if it has not been updated within 5 seconds. You 
+        can update a state by setting the state machine to the same 
+        value again or sending a command with the appropriate state 
+        value'''
         if self._state_machine_time <= (time.time() - 5) or \
         self._state_machine == 'default':
             #Always check for states other than default

@@ -9,14 +9,20 @@ class X10_Device(Base_Device):
             if state == '':
                 state = command
             plm_bytes = {'raw_x10':self._byte_address, 'x10_flags':0x00}
-            message = PLM_Message(self.core, device=self, plm_cmd='x10_send', plm_bytes=plm_bytes)
+            message = PLM_Message(self.core, 
+                                  device=self, 
+                                  plm_cmd='x10_send', 
+                                  plm_bytes=plm_bytes)
             self._queue_device_msg(message, state)
             self.plm.store_x10_address(self._byte_address)
             plm_bytes = {
                 'raw_x10':self.house_byte | CMD_TO_BYTE[command.lower()], 
                 'x10_flags':0x80
             }
-            message = PLM_Message(self.core, device=self, plm_cmd='x10_send', plm_bytes=plm_bytes)
+            message = PLM_Message(self.core, 
+                                  device=self, 
+                                  plm_cmd='x10_send', 
+                                  plm_bytes=plm_bytes)
             self._queue_device_msg(message, state)
             self.status = command.lower()
         else:
