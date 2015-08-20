@@ -9,8 +9,6 @@ class Insteon_Core(object):
     '''Provides global management functions'''
     def __init__(self):
         self._plms = []
-        # TODO move devices dict to the PLM object
-        self.devices = {}
 
     def loop_once(self):
         '''Perform one loop of processing the data waiting to be
