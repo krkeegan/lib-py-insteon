@@ -66,7 +66,7 @@ class ALDB(object):
         high = parsed_record['dev_hi']
         mid = parsed_record['dev_mid']
         low = parsed_record['dev_low']
-        return self._parent.core.devices[BYTE_TO_ID(high,mid,low)]
+        return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high,mid,low))
 
 class Base_Device(object):
     def __init__(self, core, plm):

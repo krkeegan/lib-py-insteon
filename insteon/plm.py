@@ -40,6 +40,7 @@ class PLM(Base_Device):
 
     def add_x10_device(self, address):        
         #We convert the address to its 'byte' value immediately
+        # TODO, this is bad, the insteon devices are stored by a hex str
         byte_address = (
             HOUSE_TO_BYTE[address[0:1].lower()] | UNIT_TO_BYTE[address[1:2]])
         self._devices[byte_address] = X10_Device(self.core, 
@@ -73,7 +74,6 @@ class PLM(Base_Device):
                 del self._read_buffer[0:index]
                 print('resulting buffer is', BYTE_TO_HEX(self._read_buffer))
             if self._read_buffer.startswith(wait_prefix):
-                # TODO need to slow down PLM sending
                 print ('need to slow down!!', BYTE_TO_HEX(self._read_buffer))
                 self.wait_to_send = .5
                 del self._read_buffer[0:1]
@@ -87,27 +87,23 @@ class PLM(Base_Device):
             cmd_prefix = self._read_buffer[1]
             if cmd_prefix in PLM_SCHEMA:
                 byte_length = PLM_SCHEMA[cmd_prefix]['rcvd_len']
-                # This solves Insteon stupidity.  0x62 messages can be either
-                # standard or extended length.  The only way to determine
-                # which length we have received is to look at the message flags
+                # This solves Insteon stupidity.  0x62 messages can 
+                # be either standard or extended length.  The only way
+                # to determine which length we have received is to look
+                # at the message flags
                 is_extended = 0
-                if cmd_prefix == 0x62 and \
-                  len(self._read_buffer) >= 6 and \
-                  self._read_buffer[5] & 16:
+                if (cmd_prefix == 0x62 and
+                        len(self._read_buffer) >= 6 and
+                        self._read_buffer[5] & 16):
                     is_extended = 1
-
                 msg_length = byte_length[is_extended]
                 if msg_length <= len(self._read_buffer):
                     ret = self._read_buffer[0:msg_length]
                     del self._read_buffer[0:msg_length]
-                else:
-                    pass
-                    #print('need more data',BYTE_TO_HEX(self._read_buffer)) 
-                    # Need to read more data from PLM
             else:
-                # TODO handle this
-                print("error, I don't know this prefix")
-                index = self._read_buffer.find(good_prefix)
+                print("error, I don't know this prefix", 
+                    BYTE_TO_HEX(cmd_prefix))
+                index = self._read_buffer.find(bytes.fromhex('02'))
                 del self._read_buffer[0:index]
         return ret
 
@@ -123,31 +119,29 @@ class PLM(Base_Device):
 
     def process_inc_msg(self,raw_msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
-        # No matter what, pause for a short period before sending to PLM
+        # No matter what, pause for a short period before sending data
+        # to PLM
         self.wait_to_send = (20/1000)
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
-        msg = PLM_Message(self, \
-                              raw_data = raw_msg, 
-                              is_incomming = True)
+        msg = PLM_Message(self,
+                          raw_data = raw_msg, 
+                          is_incomming = True)
         if 'recv_act' in msg.plm_schema:
-            try:
-                obj = msg.plm_schema['recv_obj'](msg)
-            except KeyError as e:
-                #TODO this is not a good test an error in the recv_act
-                #will cause it to appear as though this device doesn't exist
-                print('received message from unknown device', e)
-                return
-            try:
+            obj = msg.plm_schema['recv_obj'](msg)
+            if obj is not None:
                 msg.plm_schema['recv_act'](obj, msg)
-            except Exception as e:
-                # Use this to somehow keep messages in the queue??
-                # Not sure that is really possible, won't we just end
-                # up here again?
-                print('Error', e)
         else:
             print('received msg, but no action specified')
             pprint.pprint(msg.__dict__)
-        
+
+    def get_device_by_addr(self,addr):
+        ret = None
+        try:
+            ret = self.plm._devices[addr]
+        except KeyError as e:
+            print('error, unknown device address=', addr)
+        return ret
+
     def queue_msg(self,msg):
         self._msg_queue.append(msg)
 
@@ -231,8 +225,8 @@ class PLM(Base_Device):
         '''Loops through all of the devices and sends the 
         oldest message currently waiting in a device queue
         if there are no other conflicts'''
-        if not self._is_ack_pending() and \
-        time.time() > self.wait_to_send:
+        if (not self._is_ack_pending() and 
+                time.time() > self.wait_to_send):
             devices = [self,]
             msg_time = 0
             sending_device = False
@@ -258,14 +252,14 @@ class PLM(Base_Device):
                 ret = True
             elif not self._last_msg.plm_ack:
                 ret = True
-            elif self._last_msg.insteon_msg and \
-            not self._last_msg.insteon_msg.device_ack:
+            elif (self._last_msg.insteon_msg and 
+                    not self._last_msg.insteon_msg.device_ack):
                 ret = True
         return ret
 
     def rcvd_plm_ack(self,msg):
-        if self._last_msg.plm_ack == False\
-        and msg.raw_msg[0:-1] == self._last_msg.raw_msg:
+        if (self._last_msg.plm_ack == False
+                and msg.raw_msg[0:-1] == self._last_msg.raw_msg):
             if msg.plm_resp_ack:
                 self._last_msg.plm_ack = True
             elif msg.plm_resp_nack:
@@ -360,25 +354,27 @@ class PLM(Base_Device):
                               device=self, 
                               plm_cmd='all_link_send', 
                               plm_bytes=plm_bytes)
-        #Until all link status is complete, sending any other cmds to PLM
-        #will cause it to abandon all link process
-        message.seq_lock = True
-        #TODO Calculate sequence lock time based on number of items in group
-        message.seq_time = 5
-        #Queue up indiv device cleanup messages
         self._queue_device_msg(message, 'all_link_send')
         records = self._aldb.search_for_records({
             'controller' : True,
             'group': group,
             'in_use': True
         })
+        #Until all link status is complete, sending any other cmds to PLM
+        #will cause it to abandon all link process
+        message.seq_lock = True
+        message.seq_time = (len(records) + 1) * (87/1000 * 6)
         for position in records:
             linked_device = self._aldb.linked_device(position)
             # Queue a cleanup message on each device, this msg will
             # be cleared from the queue on receipt of a cleanup
             # ack
-            ##TESTING ONLY, need to pick on or off
-            linked_device.send_command('off_cleanup', '', {'cmd_2' : group})
+            # TODO we are not currently handling uncommon alias type 
+            # cmds
+            cmd_str = 'on_cleanup'
+            if cmd == 0x13:
+                cmd_str = 'off_cleanup'
+            linked_device.send_command(cmd_str, '', {'cmd_2' : group})
 
     def rcvd_all_link_clean_status(self,msg):
         if self._last_msg.plm_cmd_type == 'all_link_send':
@@ -392,12 +388,17 @@ class PLM(Base_Device):
                 #alllink cleanup arrives
             elif msg.plm_resp_nack:
                 print('Send All Link - Error')
-                #We don't remove the state machine, so that further
-                #direct cleanups can use it
+                #We don't resend, instead we rely on individual device
+                #alllink cleanups to do the work
+                self.remove_state_machine('all_link_send')
         else:
             print('Ignored spurious all link clean status')
 
     def rcvd_all_link_clean_failed(self,msg):
-        print('A specific device faileled to ack the cleanup msg')
-        #TODO ensure that this is marked as false in item list
+        failed_addr = byttearray()
+        failed_addr.extend(msg.get_byte_by_name('fail_addr_hi'))
+        failed_addr.extend(msg.get_byte_by_name('fail_addr_mid'))
+        failed_addr.extend(msg.get_byte_by_name('fail_addr_low'))
+        print('A specific device faileled to ack the cleanup msg from addr',
+              BYTE_TO_HEX(failed_addr))
 

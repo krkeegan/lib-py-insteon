@@ -32,7 +32,7 @@ PLM_SCHEMA = {
         'send_len' : (0,),
         'name'     : 'insteon_received',
         'recv_act' : lambda obj, msg: obj.msg_rcvd(msg),
-        'recv_obj' : lambda self : self.plm._devices[self.insteon_msg.from_addr_str],
+        'recv_obj' : lambda self : self.plm.get_device_by_addr(self.insteon_msg.from_addr_str),
         'recv_byte_pos'    : {
             'from_addr_hi'  : 2,
             'from_addr_mid' : 3,
@@ -50,7 +50,7 @@ PLM_SCHEMA = {
         'send_len' : (0,),
         'name'     : 'insteon_ext_received',
         'recv_act' : lambda obj, msg: obj.msg_rcvd(msg),
-        'recv_obj' : lambda self : self.plm._devices[self.insteon_msg.from_addr_str],
+        'recv_obj' : lambda self : self.plm.get_device_by_addr(self.insteon_msg.from_addr_str),
         'recv_byte_pos'    : {
             'from_addr_hi'  : 2,
             'from_addr_mid' : 3,
