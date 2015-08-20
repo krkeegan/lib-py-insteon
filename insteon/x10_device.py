@@ -9,7 +9,7 @@ class X10_Device(Base_Device):
             if state == '':
                 state = command
             plm_bytes = {'raw_x10':self._byte_address, 'x10_flags':0x00}
-            message = PLM_Message(self.core, 
+            message = PLM_Message(self.plm, 
                                   device=self, 
                                   plm_cmd='x10_send', 
                                   plm_bytes=plm_bytes)
@@ -19,7 +19,7 @@ class X10_Device(Base_Device):
                 'raw_x10':self.house_byte | CMD_TO_BYTE[command.lower()], 
                 'x10_flags':0x80
             }
-            message = PLM_Message(self.core, 
+            message = PLM_Message(self.plm, 
                                   device=self, 
                                   plm_cmd='x10_send', 
                                   plm_bytes=plm_bytes)

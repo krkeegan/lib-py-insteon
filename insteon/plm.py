@@ -2,6 +2,7 @@ import serial
 import time
 import datetime
 
+from .insteon_device import Insteon_Device
 from .base_objects import Base_Device, ALDB, Group
 from .message import PLM_Message
 from .helpers import *
@@ -16,6 +17,7 @@ class PLM(Base_Device):
         self._wait_to_send = 0
         self._last_x10_house = ''
         self._last_x10_unit = ''
+        self._devices = {}
         if port != 'test_fixture':
             self._serial = serial.Serial(
                         port=port,
@@ -29,6 +31,21 @@ class PLM(Base_Device):
             self._serial = 'test_fixture'
         for number in range(0x01,0xFF):
             self.add_group(number)
+
+    def add_device(self, device_id):
+        self._devices[device_id] = Insteon_Device(self.core, 
+                                                 self, 
+                                                 device_id=device_id)
+        return self._devices[device_id]
+
+    def add_x10_device(self, address):        
+        #We convert the address to its 'byte' value immediately
+        byte_address = (
+            HOUSE_TO_BYTE[address[0:1].lower()] | UNIT_TO_BYTE[address[1:2]])
+        self._devices[byte_address] = X10_Device(self.core, 
+                                                self, 
+                                                byte_address=byte_address)
+        return self._devices[byte_address]
 
     def _read(self):
         '''Reads bytes from PLM and loads them into a buffer'''
@@ -109,7 +126,7 @@ class PLM(Base_Device):
         # No matter what, pause for a short period before sending to PLM
         self.wait_to_send = (20/1000)
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
-        msg = PLM_Message(self.core, \
+        msg = PLM_Message(self, \
                               raw_data = raw_msg, 
                               is_incomming = True)
         if 'recv_act' in msg.plm_schema:
@@ -162,7 +179,7 @@ class PLM(Base_Device):
 
     def send_command(self,command, state = '', plm_bytes = {}):
         message = PLM_Message(
-            self.core, device=self, 
+            self, device=self, 
             plm_cmd=command, plm_bytes=plm_bytes)
         self._queue_device_msg(message, state)
 
@@ -219,7 +236,7 @@ class PLM(Base_Device):
             devices = [self,]
             msg_time = 0
             sending_device = False
-            for id, device in self.core.devices.items():
+            for id, device in self._devices.items():
                 devices.append(device)
             for device in devices:
                 dev_msg_time = device.next_msg_create_time()
@@ -319,7 +336,7 @@ class PLM(Base_Device):
         if (self._last_x10_house == 
                 msg.get_byte_by_name('raw_x10') & 0b11110000):
             try:
-                device = self.core.devices[self.get_x10_address()]
+                device = self._devices[self.get_x10_address()]
                 device.inc_x10_msg(msg)
             except KeyError:
                 print('Received and X10 command for an unknown device')
@@ -339,7 +356,7 @@ class PLM(Base_Device):
             'cmd_1'     : cmd,
             'cmd_2'     : 0x00,
         }
-        message = PLM_Message(self.core, 
+        message = PLM_Message(self, 
                               device=self, 
                               plm_cmd='all_link_send', 
                               plm_bytes=plm_bytes)

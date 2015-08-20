@@ -221,7 +221,7 @@ class Insteon_Device(Base_Device):
                 return False
         command = cmd_schema.copy()
         command['name'] = command_name
-        message = PLM_Message(self._core, 
+        message = PLM_Message(self.plm, 
                               device=self, 
                               plm_cmd='insteon_send', 
                               dev_cmd=command, 

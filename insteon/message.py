@@ -5,8 +5,8 @@ from .helpers import *
 
 class PLM_Message(object):
     #Initialization Functions
-    def __init__(self, core, **kwargs):
-        self._core = core
+    def __init__(self, plm, **kwargs):
+        self._plm = plm
         self._plm_ack = False
         self._seq_time = 0
         self._seq_lock = False
@@ -23,8 +23,8 @@ class PLM_Message(object):
         self.command_to_raw(**kwargs)
 
     @property
-    def core(self):
-        return self._core
+    def plm(self):
+        return self._plm
 
     @property
     def creation_time(self):
