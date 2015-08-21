@@ -3,7 +3,7 @@ import time
 import datetime
 
 from .insteon_device import Insteon_Device
-from .base_objects import Base_Device, ALDB, Group
+from .base_objects import Base_Device, ALDB
 from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
@@ -18,6 +18,7 @@ class PLM(Base_Device):
         self._last_x10_house = ''
         self._last_x10_unit = ''
         self._devices = {}
+        self.device_id = ''
         if port != 'test_fixture':
             self._serial = serial.Serial(
                         port=port,
@@ -30,7 +31,7 @@ class PLM(Base_Device):
         else:
             self._serial = 'test_fixture'
         for number in range(0x01,0xFF):
-            self.add_group(number)
+            self.attribute('state_' + str(number), '')
 
     def add_device(self, device_id):
         self._devices[device_id] = Insteon_Device(self.core, 
@@ -167,9 +168,9 @@ class PLM(Base_Device):
         if self._last_msg.plm_cmd_type == 'plm_info' and msg_obj.plm_resp_ack:
             self._last_msg.plm_ack = True
             self.device_id = msg_obj.get_byte_by_name('from_addr')
-            self.dev_cat = msg_obj.get_byte_by_name('dev_cat')
-            self.sub_cat = msg_obj.get_byte_by_name('sub_cat')
-            self.firmware = msg_obj.get_byte_by_name('firmware')
+            self.attribute('dev_cat',msg_obj.get_byte_by_name('dev_cat'))
+            self.attribute('sub_cat',msg_obj.get_byte_by_name('sub_cat'))
+            self.attribute('firmware', msg_obj.get_byte_by_name('firmware'))
 
     def send_command(self,command, state = '', plm_bytes = {}):
         message = PLM_Message(

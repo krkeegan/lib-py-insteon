@@ -1,4 +1,5 @@
 import time
+import pprint
 
 from .helpers import *
 
@@ -15,6 +16,12 @@ class ALDB(object):
 
     def get_all_records(self):
         return self._aldb.copy()
+
+    def get_all_records_str(self):
+        ret = {}
+        for key, value in self._aldb.items():
+            ret[key] = BYTE_TO_HEX(value)
+        return ret
 
     def clear_all_records(self):
         self._aldb = {}
@@ -69,13 +76,14 @@ class ALDB(object):
         return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high,mid,low))
 
 class Base_Device(object):
+    #TODO Store Device State
     def __init__(self, core, plm):
         self._core = core
         self._plm = plm
         self._state_machine = 'default'
         self._state_machine_time = 0
         self._device_msg_queue = {}
-        self._groups = {}
+        self._attributes = {}
         self._out_history = []
         self._aldb = ALDB(self)
 
@@ -155,9 +163,6 @@ class Base_Device(object):
             ret = self._device_msg_queue[self.state_machine][0].creation_time
         return ret
 
-    def add_group(self,number):
-        self._groups[number] = Group(self)
-
     def _update_message_history(self,msg):
         # Remove old messages first
         archive_time = time.time() - 120
@@ -189,20 +194,12 @@ class Base_Device(object):
                     break
         return ret
 
-class Group(object):
-    def __init__(self, parent):
-        self._parent = parent
-        self._attributes = {}
-
-    @property
-    def attribute(self,attr):
+    def attribute(self,attr,value = None):
+        if value is not None:
+            self._attributes[attr] = value
         try:
-            ret = self._attribute[attr]
+            ret = self._attributes[attr]
         except KeyError:
             ret = None
         return ret
-
-    @attribute.setter
-    def attribute(self,attr,value):
-        self._attribute[attr] = value
 

@@ -1,7 +1,7 @@
 import math
 import time
 
-from .base_objects import Base_Device, ALDB, Group
+from .base_objects import Base_Device, ALDB
 from .msg_schema import *
 from .message import PLM_Message, Insteon_Message
 from .helpers import *
@@ -10,9 +10,10 @@ class Insteon_Device(Base_Device):
     def __init__(self, core, plm, **kwargs):
         super().__init__(core, plm)
         self._dev_id_str_to_bytes(kwargs['device_id'])
-        self.dev_cat = 0x01
-        self.sub_cat = 0x20
-        self.firmware = ''
+        # TODO Temp Hardcoded
+        self.attribute('dev_cat',0x01)
+        self.attribute('sub_cat', 0x20)
+        self.attribute('firmware', '')
         self.last_msg = ''
         self._aldb_delta = ''
         self.status = ''
@@ -60,9 +61,9 @@ class Insteon_Device(Base_Device):
             self._process_direct_ack(msg)
         elif msg.insteon_msg.message_type == 'broadcast':
             self._set_plm_wait(msg)
-            self.dev_cat = msg.get_byte_by_name('to_addr_hi')
-            self.sub_cat = msg.get_byte_by_name('to_addr_mid')
-            self.firmware = msg.get_byte_by_name('to_addr_low')
+            self.attribute('dev_cat', msg.get_byte_by_name('to_addr_hi'))
+            self.attribute('sub_cat', msg.get_byte_by_name('to_addr_mid'))
+            self.attribute('firmware', msg.get_byte_by_name('to_addr_low'))
             print('was broadcast')
         elif msg.insteon_msg.message_type == 'alllink_cleanup_ack':
             #TODO set state of the device based on cmd acked
@@ -105,9 +106,9 @@ class Insteon_Device(Base_Device):
         elif msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
             command = STD_DIRECT_ACK_SCHEMA[msg.get_byte_by_name('cmd_1')]
             search_list = [
-                ['DevCat'    , self.dev_cat],
-                ['SubCat'    , self.sub_cat],
-                ['Firmware'  , self.firmware],
+                ['DevCat'    , self.attribute('dev_cat')],
+                ['SubCat'    , self.attribute('sub_cat')],
+                ['Firmware'  , self.attribute('firmware')],
                 ['Cmd2'      , self.last_msg.get_byte_by_name('cmd_2')]
             ]
             for search_item in search_list:
@@ -119,7 +120,7 @@ class Insteon_Device(Base_Device):
             self.last_msg.insteon_msg.device_ack = True
         elif (self.last_msg.get_byte_by_name('cmd_1') == 
                 msg.get_byte_by_name('cmd_1')):
-            print('rcvd un coded ack')
+            print('rcvd ack, nothing to do')
             self.last_msg.insteon_msg.device_ack = True
         else:
             print('ignoring an unmatched ack')
@@ -210,9 +211,9 @@ class Insteon_Device(Base_Device):
             print('command not found', e)
             return False
         search_list = [
-            ['DevCat'    , self.dev_cat],
-            ['SubCat'    , self.sub_cat],
-            ['Firmware'  , self.firmware]
+            ['DevCat'    , self.attribute('dev_cat')],
+            ['SubCat'    , self.attribute('sub_cat')],
+            ['Firmware'  , self.attribute('firmware')]
         ]
         for search_item in search_list:
             cmd_schema = self._recursive_search_cmd(cmd_schema,search_item)
