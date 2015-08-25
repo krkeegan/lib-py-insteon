@@ -32,11 +32,30 @@ class Insteon_Core(object):
             plm.process_queue()
         self._save_state()
 
-    def add_plm(self,port):
+    def add_plm(self,**kwargs):
         '''Inform the core of a plm that should be monitored as part
         of the core process'''
-        ret = PLM(port, self)
-        self._plms.append(ret)
+        device_id = ''
+        ret = None
+        if 'device_id' in kwargs:
+            device_id = kwargs['device_id']
+        if 'attributes' in kwargs:
+            attributes = kwargs['attributes']
+            ret = PLM(self, device_id=device_id, attributes=attributes)
+        elif 'port' in kwargs:
+            port = kwargs['port']
+            ret = PLM(self, device_id=device_id, port=port)
+        else:
+            print('you need to define a port for this plm')
+        if ret is not None:
+            self._plms.append(ret)
+        return ret
+
+    def get_plm_by_id(self,id):
+        ret = None
+        for plm in self._plms:
+            if plm.device_id == id:
+                ret = plm
         return ret
 
     def _save_state(self, is_exit = False):
@@ -72,7 +91,7 @@ class Insteon_Core(object):
             read_data = {}
         if 'PLMs' in read_data:
             for plm_id, plm_data in read_data['PLMs'].items():
-                self.add_plm(plm_data['port'])
+                self.add_plm(attributes=plm_data,device_id=plm_id)
 
     def _signal_handler(self, signal, frame):
         #Catches a Ctrl + C and Saves the Config before exiting

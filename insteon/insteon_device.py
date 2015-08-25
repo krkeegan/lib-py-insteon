@@ -261,8 +261,8 @@ class Insteon_Device(Base_Device):
         if self.state_machine == 'query_aldb' and \
            self.last_msg.insteon_msg.device_cmd_name == 'peek_one_byte':
             if (self.lsb % 8) == 0:
-                self._aldb.edit_dev_record(self._get_aldb_key(),bytearray(8))
-            self._aldb.edit_dev_record_byte(
+                self._aldb.edit_record(self._get_aldb_key(),bytearray(8))
+            self._aldb.edit_record_byte(
                 self._get_aldb_key(),
                 self.lsb % 8, 
                 msg.get_byte_by_name('cmd_2')

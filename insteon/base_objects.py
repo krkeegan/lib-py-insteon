@@ -8,7 +8,7 @@ class ALDB(object):
         self._parent = parent
         self._aldb = {}
 
-    def edit_dev_record(self,position,record):
+    def edit_record(self,position,record):
         self._aldb[position] = record
 
     def get_record(self,position):
@@ -23,14 +23,19 @@ class ALDB(object):
             ret[key] = BYTE_TO_HEX(value)
         return ret
 
+    def load_aldb_records(self,records):
+        for key, record in records.items():
+            self.edit_record(key, bytearray.fromhex(record))
+
     def clear_all_records(self):
         self._aldb = {}
 
-    def edit_dev_record_byte(self,aldb_pos,byte_pos,byte):
+    def edit_record_byte(self,aldb_pos,byte_pos,byte):
         self._aldb[aldb_pos][byte_pos] = byte
 
     def add_plm_record(self,record):
-        position = len(self._aldb) + 1
+        position = str(len(self._aldb) + 1)
+        position = position.zfill(4)
         self._aldb[position] = record
 
     def search_for_records(self,attributes):
@@ -212,3 +217,11 @@ class Base_Device(object):
             ret = None
         return ret
 
+    def _load_attributes(self,attributes):
+        for name, value in attributes.items():
+            if name == 'ALDB':
+                self._aldb.load_aldb_records(value)
+            elif name == 'Devices':
+                pass
+            else:
+                self.attribute(name,value)

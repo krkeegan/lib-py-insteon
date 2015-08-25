@@ -9,7 +9,7 @@ from .helpers import *
 from .msg_schema import *
 
 class PLM(Base_Device):
-    def __init__(self, port, core):
+    def __init__(self, core, **kwargs):
         super().__init__(core, self)
         self._read_buffer = bytearray()
         self._last_msg = ''
@@ -19,6 +19,16 @@ class PLM(Base_Device):
         self._last_x10_unit = ''
         self._devices = {}
         self.device_id = ''
+        if 'device_id' in kwargs:
+            self.device_id = kwargs['device_id']
+        port = ''
+        if 'attributes' in kwargs:
+            port = kwargs['attributes']['port']
+            self._load_attributes(kwargs['attributes'])
+        elif 'port' in kwargs:
+            port = kwargs['port']
+        else:
+            print('you need to define a port for this plm')
         self.attribute('port', port)
         if port != 'test_fixture':
             self._serial = serial.Serial(
@@ -344,6 +354,7 @@ class PLM(Base_Device):
     def query_aldb (self):
         '''Queries the PLM for a list of the link records saved on
         the PLM and stores them in the cache'''
+        self._aldb.clear_all_records()
         self.send_command('all_link_first_rec', 'query_aldb')
 
     def send_group_cmd(self,group,cmd):
