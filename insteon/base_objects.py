@@ -145,6 +145,15 @@ class Base_Device(object):
             self._device_msg_queue[state] = []
         self._device_msg_queue[state].append(message)
 
+    def _resend_msg(self,message):
+        #This is a bit of a hack, assumes the state has not changed
+        #Maybe move state to the message class?
+        state = self.state_machine
+        if state not in self._device_msg_queue:
+            self._device_msg_queue[state] = []
+        self._device_msg_queue[state].append(message)
+        self._state_machine_time = time.time()
+
     def pop_device_queue(self):
         '''Returns and removes the next message in the queue'''
         ret = None

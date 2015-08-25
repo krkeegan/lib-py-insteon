@@ -19,12 +19,19 @@ class PLM_Message(object):
         self._creation_time = time.time()
         self._time_sent = 0
         if 'is_incomming' in kwargs: self._is_incomming = True
+        self._device = None
+        if 'device' in kwargs:
+            self._device = kwargs['device']
         self.msg_from_raw(**kwargs)
         self.command_to_raw(**kwargs)
 
     @property
     def plm(self):
         return self._plm
+
+    @property
+    def device(self):
+        return self._device
 
     @property
     def creation_time(self):
@@ -222,8 +229,6 @@ class Insteon_Message(object):
         self._device_cmd_name = ''
         self._parent = parent
         #Need to reinitialize the message length??? Extended message
-        if 'device' in kwargs:
-            self._device = kwargs['device']
         if 'dev_cmd' in kwargs:
             self._construct_insteon_send(kwargs['dev_cmd'])
         if 'dev_bytes' in kwargs:
@@ -233,11 +238,11 @@ class Insteon_Message(object):
     def _construct_insteon_send(self,dev_cmd):
         msg_flags = self._construct_msg_flags(dev_cmd)
         self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
-        self._parent._insert_byte_into_raw(self.device.dev_id_hi,'to_addr_hi')
+        self._parent._insert_byte_into_raw(self._parent.device.dev_id_hi,'to_addr_hi')
         self._parent._insert_byte_into_raw(
-            self.device.dev_id_mid,'to_addr_mid')
+            self._parent.device.dev_id_mid,'to_addr_mid')
         self._parent._insert_byte_into_raw(
-            self.device.dev_id_low,'to_addr_low')
+            self._parent.device.dev_id_low,'to_addr_low')
         # Process functions if they exist
         keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 
                 'usr_3', 'usr_4', 'usr_5', 'usr_6',
@@ -246,7 +251,7 @@ class Insteon_Message(object):
         #could shorten this by just searching for callable keys in command
         for key in keys:
             if key in dev_cmd and callable(dev_cmd[key]):
-                value = dev_cmd[key](self.device)
+                value = dev_cmd[key](self._parent.device)
                 self._parent._insert_byte_into_raw(value,key)
             elif key in dev_cmd:
                 self._parent._insert_byte_into_raw(dev_cmd[key],key)
@@ -267,14 +272,10 @@ class Insteon_Message(object):
         msg_flags = msg_flags << 5
         if dev_cmd['msg_length'] == 'extended':
             msg_flags = msg_flags | 16
-        hops_left = self.device.smart_hops << 2
+        hops_left = self._parent.device.smart_hops << 2
         msg_flags = msg_flags | hops_left
-        msg_flags = msg_flags | self.device.smart_hops
+        msg_flags = msg_flags | self._parent.device.smart_hops
         return msg_flags
-
-    @property
-    def device(self):
-        return self._device
 
     @property
     def device_retry(self):

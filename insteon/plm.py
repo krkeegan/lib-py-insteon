@@ -19,6 +19,7 @@ class PLM(Base_Device):
         self._last_x10_unit = ''
         self._devices = {}
         self.device_id = ''
+        self.attribute('port', port)
         if port != 'test_fixture':
             self._serial = serial.Serial(
                         port=port,
@@ -120,9 +121,6 @@ class PLM(Base_Device):
 
     def process_inc_msg(self,raw_msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
-        # No matter what, pause for a short period before sending data
-        # to PLM
-        self.wait_to_send = (20/1000)
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
         msg = PLM_Message(self,
                           raw_data = raw_msg, 
@@ -143,19 +141,19 @@ class PLM(Base_Device):
             print('error, unknown device address=', addr)
         return ret
 
-    def queue_msg(self,msg):
-        self._msg_queue.append(msg)
-
     def _send_msg(self, msg):
         self._last_msg = msg
         self.write(msg)
     
     def _resend_msg(self):
-        self._last_msg.plm_ack = False
-        self._last_msg.device_ack = False
         msg = self._last_msg
+        msg.plm_ack = False
+        msg.device_ack = False
         self._last_msg = {}
-        self._msg_queue.insert(0,msg)
+        if msg._device:
+            msg._device._resend_msg(msg)
+        else:
+            self._resend_msg(msg)
 
     def write(self, msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
@@ -203,10 +201,10 @@ class PLM(Base_Device):
             return
         if msg.insteon_msg and msg.insteon_msg.device_ack == False:
             total_hops = msg.insteon_msg.max_hops *2
-            hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
-            # These numbers come from real world use (87, 183)
-            # 100ms for device to process the msg internally
-            total_delay = (total_hops * hop_delay/1000) + (100/1000)
+            hop_delay = 50 if msg.insteon_msg.msg_length == 'standard' else 109
+            # Add 1 additional second based on trial and error, perhaps
+            # to allow device to 'think'
+            total_delay = (total_hops * hop_delay/1000) + 1
             if msg.time_sent < time.time() - total_delay:
                 print(
                     now, 
@@ -242,7 +240,7 @@ class PLM(Base_Device):
                 dev_msg = sending_device.pop_device_queue()
                 if dev_msg:
                     if dev_msg.insteon_msg:
-                        device = dev_msg.insteon_msg.device
+                        device = dev_msg.device
                         device.last_msg = dev_msg
                     self._send_msg(dev_msg)
 

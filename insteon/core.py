@@ -41,7 +41,6 @@ class Insteon_Core(object):
     def _save_state(self, is_exit = False):
         #Saves the config of the entire core to a file
         if self._last_saved_time < time.time() - 60 or is_exit:
-            print('SAVING!!')
             #Save once a minute, on on exit
             out_data = {'PLMs' : {}}
             for plm in self._plms:
@@ -65,6 +64,6 @@ class Insteon_Core(object):
 
     def _signal_handler(self, signal, frame):
         #Catches a Ctrl + C and Saves the Config before exiting
-        self.save_state(True)
+        self._save_state(True)
         print('You pressed Ctrl+C!')
         sys.exit(0)

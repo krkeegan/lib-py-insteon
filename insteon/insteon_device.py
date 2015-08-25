@@ -1,5 +1,6 @@
 import math
 import time
+import pprint
 
 from .base_objects import Base_Device, ALDB
 from .msg_schema import *
@@ -54,13 +55,13 @@ class Insteon_Device(Base_Device):
         return self._dev_id_low
 
     def msg_rcvd(self,msg):
+        self._set_plm_wait(msg)
         if self._is_duplicate(msg):
             print ('Skipped duplicate msg')
             return
         if msg.insteon_msg.message_type == 'direct_ack':
             self._process_direct_ack(msg)
         elif msg.insteon_msg.message_type == 'broadcast':
-            self._set_plm_wait(msg)
             self.attribute('dev_cat', msg.get_byte_by_name('to_addr_hi'))
             self.attribute('sub_cat', msg.get_byte_by_name('to_addr_mid'))
             self.attribute('firmware', msg.get_byte_by_name('to_addr_low'))
@@ -93,7 +94,6 @@ class Insteon_Device(Base_Device):
 
     def _process_direct_ack(self,msg):
         '''processes an incomming direct ack message'''
-        self._set_plm_wait(msg, True)
         self._add_to_hop_tracking(msg)
         if not self._is_valid_direct_ack(msg):
             return
@@ -151,18 +151,13 @@ class Insteon_Device(Base_Device):
             avg = 3
         return math.ceil(avg)
 
-    def _set_plm_wait(self,msg,is_extra_slow = False):
-        # These numbers come from real world use
-        hop_delay = 87 if msg.insteon_msg.msg_length == 'standard' else 183
+    def _set_plm_wait(self,msg):
+        # Wait for additional hops to arrive
+        hop_delay = 50 if msg.insteon_msg.msg_length == 'standard' else 108
         total_delay = hop_delay * msg.insteon_msg.hops_left
-        if is_extra_slow:
-            #Primarily used for Direct Ack messages where we want to ensure
-            #accurate data.  We add an extra delay assuming a complete resend
-            #of the prior message with +1 hops, as if the PLM ACK was never
-            #received by the device
-            total_delay += hop_delay * (msg.insteon_msg.max_hops + 1) * 2
         expire_time = (total_delay / 1000)
-        self.plm.wait_to_send = expire_time
+        # Force a 5 millisecond delay for all
+        self.plm.wait_to_send = expire_time + (5/1000)
 
     def _is_duplicate(self,msg):
         '''Checks to see if this is a duplicate message'''
