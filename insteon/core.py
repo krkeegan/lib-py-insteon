@@ -17,6 +17,7 @@ class Insteon_Core(object):
     def __init__(self):
         self._plms = []
         self._last_saved_time = 0
+        self._load_state()
         #Be sure to save before exiting
         atexit.register(self._save_state, True)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -61,6 +62,17 @@ class Insteon_Core(object):
                           ensure_ascii=False)
             self._saved_state = out_data
             self._last_saved_time = time.time()
+
+    def _load_state(self):
+        try:
+            with open('config.json', 'r') as infile:
+                read_data = infile.read()
+            read_data = json.loads(read_data)
+        except FileNotFoundError:
+            read_data = {}
+        if 'PLMs' in read_data:
+            for plm_id, plm_data in read_data['PLMs'].items():
+                self.add_plm(plm_data['port'])
 
     def _signal_handler(self, signal, frame):
         #Catches a Ctrl + C and Saves the Config before exiting
