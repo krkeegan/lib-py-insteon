@@ -31,8 +31,8 @@ class PLM(Base_Device):
                         )
         else:
             self._serial = 'test_fixture'
-        for number in range(0x01,0xFF):
-            self.attribute('state_' + str(number), '')
+        if self.device_id == '':
+            self.send_command('plm_info')
 
     def add_device(self, device_id):
         self._devices[device_id] = Insteon_Device(self.core, 
@@ -165,7 +165,11 @@ class PLM(Base_Device):
     def plm_info(self,msg_obj):
         if self._last_msg.plm_cmd_type == 'plm_info' and msg_obj.plm_resp_ack:
             self._last_msg.plm_ack = True
-            self.device_id = msg_obj.get_byte_by_name('from_addr')
+            self._dev_id_hi = msg_obj.get_byte_by_name('plm_addr_hi')
+            self._dev_id_mid = msg_obj.get_byte_by_name('plm_addr_mid')
+            self._dev_id_low = msg_obj.get_byte_by_name('plm_addr_low')
+            self.device_id = BYTE_TO_HEX(
+                bytes([self._dev_id_hi,self._dev_id_mid,self._dev_id_low]))
             self.attribute('dev_cat',msg_obj.get_byte_by_name('dev_cat'))
             self.attribute('sub_cat',msg_obj.get_byte_by_name('sub_cat'))
             self.attribute('firmware', msg_obj.get_byte_by_name('firmware'))
