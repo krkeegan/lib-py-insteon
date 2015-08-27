@@ -10,21 +10,20 @@ from .msg_schema import *
 
 class PLM(Base_Device):
     def __init__(self, core, **kwargs):
-        super().__init__(core, self)
+        self._devices = {}
+        super().__init__(core, self, **kwargs)
         self._read_buffer = bytearray()
         self._last_msg = ''
         self._msg_queue = []
         self._wait_to_send = 0
         self._last_x10_house = ''
         self._last_x10_unit = ''
-        self._devices = {}
         self.device_id = ''
         if 'device_id' in kwargs:
             self.device_id = kwargs['device_id']
         port = ''
         if 'attributes' in kwargs:
             port = kwargs['attributes']['port']
-            self._load_attributes(kwargs['attributes'])
         elif 'port' in kwargs:
             port = kwargs['port']
         else:
@@ -43,11 +42,14 @@ class PLM(Base_Device):
             self._serial = 'test_fixture'
         if self.device_id == '':
             self.send_command('plm_info')
+        if self._aldb.have_aldb_cache() == False:
+            self.query_aldb()
 
-    def add_device(self, device_id):
+    def add_device(self, device_id, **kwargs):
         self._devices[device_id] = Insteon_Device(self.core, 
                                                  self, 
-                                                 device_id=device_id)
+                                                 device_id=device_id,
+                                                 **kwargs)
         return self._devices[device_id]
 
     def add_x10_device(self, address):        

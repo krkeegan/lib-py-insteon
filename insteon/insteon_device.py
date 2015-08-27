@@ -9,12 +9,8 @@ from .helpers import *
 
 class Insteon_Device(Base_Device):
     def __init__(self, core, plm, **kwargs):
-        super().__init__(core, plm)
+        super().__init__(core, plm, **kwargs)
         self._dev_id_str_to_bytes(kwargs['device_id'])
-        # TODO Temp Hardcoded
-        self.attribute('dev_cat',0x01)
-        self.attribute('sub_cat', 0x20)
-        self.attribute('firmware', '')
         self.last_msg = ''
         self._aldb_delta = ''
         self.status = ''
@@ -22,6 +18,12 @@ class Insteon_Device(Base_Device):
         self._lsb = ''
         self._recent_inc_msgs = {}
         self._hop_array = []
+        if (self.attribute('dev_cat') is None or
+                self.attribute('sub_cat') is None or
+                self.attribute('firmware') is None):
+            self.send_command('id_request')
+        if self._aldb.have_aldb_cache() == False:
+            self.query_aldb()
 
     @property
     def msb(self):
@@ -65,7 +67,7 @@ class Insteon_Device(Base_Device):
             self.attribute('dev_cat', msg.get_byte_by_name('to_addr_hi'))
             self.attribute('sub_cat', msg.get_byte_by_name('to_addr_mid'))
             self.attribute('firmware', msg.get_byte_by_name('to_addr_low'))
-            print('was broadcast')
+            print('rcvd, broadcast updated devcat, subcat, and firmware')
         elif msg.insteon_msg.message_type == 'alllink_cleanup_ack':
             #TODO set state of the device based on cmd acked
             # Clear queued cleanup messages if they exist

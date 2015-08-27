@@ -23,6 +23,12 @@ class ALDB(object):
             ret[key] = BYTE_TO_HEX(value)
         return ret
 
+    def have_aldb_cache(self):
+        ret = True
+        if len(self._aldb) == 0:
+            ret = False
+        return ret
+
     def load_aldb_records(self,records):
         for key, record in records.items():
             self.edit_record(key, bytearray.fromhex(record))
@@ -82,7 +88,7 @@ class ALDB(object):
 
 class Base_Device(object):
     #TODO Store Device State
-    def __init__(self, core, plm):
+    def __init__(self, core, plm, **kwargs):
         self._core = core
         self._plm = plm
         self._state_machine = 'default'
@@ -91,6 +97,8 @@ class Base_Device(object):
         self._attributes = {}
         self._out_history = []
         self._aldb = ALDB(self)
+        if 'attributes' in kwargs:
+            self._load_attributes(kwargs['attributes'])
 
     @property
     def core(self):
@@ -221,7 +229,11 @@ class Base_Device(object):
         for name, value in attributes.items():
             if name == 'ALDB':
                 self._aldb.load_aldb_records(value)
-            elif name == 'Devices':
-                pass
+            elif name == 'Devices':  #should only be plm?
+                self._load_devices(value)
             else:
                 self.attribute(name,value)
+
+    def _load_devices(self,devices):
+        for id,attributes in devices.items():
+            device = self.add_device(id, attributes=attributes)
