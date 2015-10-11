@@ -22,8 +22,7 @@ class Insteon_Device(Base_Device):
                 self.attribute('sub_cat') is None or
                 self.attribute('firmware') is None):
             self.send_command('id_request')
-        if self._aldb.have_aldb_cache() == False:
-            self.query_aldb()
+        self.send_command('light_status_request')
 
     @property
     def msb(self):
@@ -102,7 +101,13 @@ class Insteon_Device(Base_Device):
         elif (self.last_msg.insteon_msg.device_cmd_name == 
                 'light_status_request'):
             print('was status response')
-            self._aldb_delta = msg.get_byte_by_name('cmd_1')
+            aldb_delta = msg.get_byte_by_name('cmd_1')
+            if self.state_machine == 'set_aldb_delta':
+                self.attribute('aldb_delta', aldb_delta)
+                self.remove_state_machine('set_aldb_delta')
+            elif self.attribute('aldb_delta') != aldb_delta:
+                print('aldb has changed, rescanning')
+                self.query_aldb()
             self.status = msg.get_byte_by_name('cmd_2')
             self.last_msg.insteon_msg.device_ack = True
         elif msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
@@ -275,6 +280,7 @@ class Insteon_Device(Base_Device):
                 for key in sorted(records):
                     print (key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
+                self.send_command('light_status_request', 'set_aldb_delta')
             elif self.is_empty_aldb(self._get_aldb_key()):
                 #this is an empty record
                 print('empty record')
