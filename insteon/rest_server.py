@@ -15,11 +15,11 @@ class HTTPHandler(http.server.BaseHTTPRequestHandler):
             )
             core = self.server.core
             plms = core.get_all_plms()
-            html += "<h3>PLMS</h3><br>\n"
+            html += "<h3>PLMS</h3>\n"
             for plm in plms:
                 html += plm.device_id + "<br>\n"
                 devices = plm.get_all_devices()
-                html += "<h4>Devices</h4><br>\n"
+                html += "<h4>Devices</h4>\n"
                 for device in devices:
                     html += device.device_id_str + "<br>\n"
             self.wfile.write(bytes(html, 'UTF-8'))

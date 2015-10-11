@@ -8,6 +8,56 @@ from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
 
+class PLM_Group(object):
+    def __init__(self, plm, group_number):
+        self._plm = plm
+        self._group_number = group_number
+
+    @property
+    def plm(self):
+        return self._plm
+
+    @property
+    def group_number(self):
+        return self._group_number
+
+    def send_command(self,command_name, state = '', plm_bytes = {}):
+        #TODO are the state and plm_bytes needed?
+        '''Send an on/off command to a plm group'''
+        command = 0x11
+        if command_name.lower() == 'off':
+            command = 0x13
+        plm_bytes = {
+            'group'     : self.group_number,
+            'cmd_1'     : command,
+            'cmd_2'     : 0x00,
+        }
+        message = PLM_Message(self.plm, 
+                              device=self.plm, 
+                              plm_cmd='all_link_send', 
+                              plm_bytes=plm_bytes)
+        self.plm._queue_device_msg(message, 'all_link_send')
+        records = self.plm._aldb.search_for_records({
+            'controller' : True,
+            'group': self.group_number,
+            'in_use': True
+        })
+        #Until all link status is complete, sending any other cmds to PLM
+        #will cause it to abandon all link process
+        message.seq_lock = True
+        message.seq_time = (len(records) + 1) * (87/1000 * 6)
+        for position in records:
+            linked_device = self.plm._aldb.linked_device(position)
+            # Queue a cleanup message on each device, this msg will
+            # be cleared from the queue on receipt of a cleanup
+            # ack
+            # TODO we are not currently handling uncommon alias type 
+            # cmds
+            cmd_str = 'on_cleanup'
+            if command == 0x13:
+                cmd_str = 'off_cleanup'
+            linked_device.send_command(cmd_str, '', {'cmd_2' : self.group_number})
+
 class PLM(Base_Device):
     def __init__(self, core, **kwargs):
         self._devices = {}
@@ -44,6 +94,9 @@ class PLM(Base_Device):
             self.send_command('plm_info')
         if self._aldb.have_aldb_cache() == False:
             self.query_aldb()
+        self._groups = []
+        for group in range (0x02, 0xFF):
+            self._groups.append(PLM_Group(self,group))
 
     def add_device(self, device_id, **kwargs):
         device_id = device_id.upper()
@@ -153,6 +206,12 @@ class PLM(Base_Device):
             ret = self.plm._devices[addr]
         except KeyError as e:
             print('error, unknown device address=', addr)
+        return ret
+
+    def get_all_devices(self):
+        ret = []
+        for addr, device in self.plm._devices.items():
+            ret.append(device)
         return ret
 
     def _send_msg(self, msg):
@@ -361,39 +420,6 @@ class PLM(Base_Device):
         self._aldb.clear_all_records()
         self.send_command('all_link_first_rec', 'query_aldb')
 
-    def send_group_cmd(self,group,cmd):
-        '''Send an on/off command from a plm group'''
-        plm_bytes = {
-            'group'     : group,
-            'cmd_1'     : cmd,
-            'cmd_2'     : 0x00,
-        }
-        message = PLM_Message(self, 
-                              device=self, 
-                              plm_cmd='all_link_send', 
-                              plm_bytes=plm_bytes)
-        self._queue_device_msg(message, 'all_link_send')
-        records = self._aldb.search_for_records({
-            'controller' : True,
-            'group': group,
-            'in_use': True
-        })
-        #Until all link status is complete, sending any other cmds to PLM
-        #will cause it to abandon all link process
-        message.seq_lock = True
-        message.seq_time = (len(records) + 1) * (87/1000 * 6)
-        for position in records:
-            linked_device = self._aldb.linked_device(position)
-            # Queue a cleanup message on each device, this msg will
-            # be cleared from the queue on receipt of a cleanup
-            # ack
-            # TODO we are not currently handling uncommon alias type 
-            # cmds
-            cmd_str = 'on_cleanup'
-            if cmd == 0x13:
-                cmd_str = 'off_cleanup'
-            linked_device.send_command(cmd_str, '', {'cmd_2' : group})
-
     def rcvd_all_link_clean_status(self,msg):
         if self._last_msg.plm_cmd_type == 'all_link_send':
             self._last_msg.seq_lock = False
@@ -420,3 +446,10 @@ class PLM(Base_Device):
         print('A specific device faileled to ack the cleanup msg from addr',
               BYTE_TO_HEX(failed_addr))
 
+    def get_group_by_number(self,number):
+        ret = None
+        for group in self._groups:
+            if group.group_number == number:
+                ret = group
+                break
+        return ret

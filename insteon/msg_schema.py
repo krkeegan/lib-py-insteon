@@ -821,9 +821,27 @@ COMMAND_SCHEMA = {
                         {   'Firmware' : 'all',
                             'value' : {
                                 'cmd_1'   : 0x11,
-                                'cmd_2'   : lambda x: x.plm.cleanup_group,
+                                'cmd_2'   : 0x00,
                                 'msg_length' : 'standard',
                                 'message_type' : 'alllink_cleanup'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    'off' : [
+        {   'DevCat' : (0x01,0x02),
+            'value'  : [
+                {   'SubCat' : 'all',
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : {
+                                'cmd_1'   : 0x13,
+                                'cmd_2'   : 0x00,
+                                'msg_length' : 'standard',
+                                'message_type' : 'direct'
                             }
                         }
                     ]

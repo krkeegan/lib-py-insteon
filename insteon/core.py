@@ -5,10 +5,12 @@ import time
 import atexit
 import signal
 import sys
+import threading
 
 from .plm import PLM
 from .msg_schema import *
 from .helpers import *
+from .rest_server import *
 
 # TODO Load State
 
@@ -21,7 +23,12 @@ class Insteon_Core(object):
         #Be sure to save before exiting
         atexit.register(self._save_state, True)
         signal.signal(signal.SIGINT, self._signal_handler)
-        
+
+    def start_rest_server(self):
+        server = http.server.HTTPServer(('', 8080),HTTPHandler)
+        server.core = self
+        thread = threading.Thread(target = server.serve_forever, daemon = True)
+        thread.start()
 
     def loop_once(self):
         '''Perform one loop of processing the data waiting to be
@@ -56,6 +63,12 @@ class Insteon_Core(object):
         for plm in self._plms:
             if plm.device_id == id:
                 ret = plm
+        return ret
+
+    def get_all_plms(self):
+        ret = []
+        for plm in self._plms:
+            ret.append(plm)
         return ret
 
     def _save_state(self, is_exit = False):
