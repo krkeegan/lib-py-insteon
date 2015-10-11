@@ -46,10 +46,12 @@ class PLM(Base_Device):
             self.query_aldb()
 
     def add_device(self, device_id, **kwargs):
-        self._devices[device_id] = Insteon_Device(self.core, 
-                                                 self, 
-                                                 device_id=device_id,
-                                                 **kwargs)
+        device_id = device_id.upper()
+        if device_id not in self._devices:
+            self._devices[device_id] = Insteon_Device(self.core, 
+                                                      self, 
+                                                      device_id=device_id,
+                                                      **kwargs)
         return self._devices[device_id]
 
     def add_x10_device(self, address):        
