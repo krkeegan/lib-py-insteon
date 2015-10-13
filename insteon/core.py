@@ -86,12 +86,17 @@ class Insteon_Core(object):
                     dev_point = device._attributes.copy()
                     dev_point['ALDB'] = device._aldb.get_all_records_str()
                     plm_point['Devices'][address] = dev_point
-            with open('config.json', 'w') as outfile:
-                json.dump(out_data, 
-                          outfile, 
-                          sort_keys = True, 
-                          indent = 4, 
-                          ensure_ascii=False)
+            try:
+                json_string = json.dumps(out_data, 
+                                         sort_keys = True, 
+                                         indent = 4, 
+                                         ensure_ascii=False)
+            except Exception:
+                print ('error writing config to file')
+            else:
+                outfile = open('config.json', 'w')
+                outfile.write(json_string)
+                outfile.close()
             self._saved_state = out_data
             self._last_saved_time = time.time()
 
@@ -102,6 +107,9 @@ class Insteon_Core(object):
             read_data = json.loads(read_data)
         except FileNotFoundError:
             read_data = {}
+        except ValueError:
+            read_data = {}
+            print('unable to read config file, skipping')
         if 'PLMs' in read_data:
             for plm_id, plm_data in read_data['PLMs'].items():
                 self.add_plm(attributes=plm_data,device_id=plm_id)
