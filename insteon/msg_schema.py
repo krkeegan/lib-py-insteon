@@ -440,7 +440,7 @@ STD_DIRECT_ACK_SCHEMA = {
                         {   'Firmware' : 'all',
                             'value' : [
                                 {   'Cmd2' : 'all',
-                                    'value' : lambda x, y : x.engine_version(y)
+                                    'value' : lambda x, y : x._set_engine_version(y)
                                 }
                             ]
                         }
@@ -731,6 +731,24 @@ COMMAND_SCHEMA = {
                         {   'Firmware' : 'all',
                             'value' : {
                                 'cmd_1'   : 0x03,
+                                'cmd_2'   : 0x00,
+                                'msg_length' : 'standard',
+                                'message_type' : 'direct'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    'get_engine_version' : [
+        {   'DevCat' : 'all',
+            'value'  : [
+                {   'SubCat' : 'all',
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : {
+                                'cmd_1'   : 0x0D,
                                 'cmd_2'   : 0x00,
                                 'msg_length' : 'standard',
                                 'message_type' : 'direct'

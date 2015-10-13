@@ -22,6 +22,8 @@ class Insteon_Device(Base_Device):
                 self.attribute('sub_cat') is None or
                 self.attribute('firmware') is None):
             self.send_command('id_request')
+        if self.attribute('engine_version') is None:
+            self.send_command('get_engine_version')
         self.send_command('light_status_request')
 
     @property
@@ -108,6 +110,7 @@ class Insteon_Device(Base_Device):
             elif self.attribute('aldb_delta') != aldb_delta:
                 print('aldb has changed, rescanning')
                 self.query_aldb()
+            #TODO, we want to change aldb_deltas that are at 0x00
             self.status = msg.get_byte_by_name('cmd_2')
             self.last_msg.insteon_msg.device_ack = True
         elif msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
@@ -220,6 +223,7 @@ class Insteon_Device(Base_Device):
         for search_item in search_list:
             cmd_schema = self._recursive_search_cmd(cmd_schema,search_item)
             if not cmd_schema:
+                #TODO figure out some way to allow queuing prior to dev cat?
                 print('command not available for this device')
                 return False
         command = cmd_schema.copy()
@@ -313,3 +317,6 @@ class Insteon_Device(Base_Device):
     def peek_aldb (self):
         self.send_command('peek_one_byte', 'query_aldb')
 
+    def _set_engine_version(self,msg):
+        version = msg.get_byte_by_name('cmd_2')
+        self.attribute('engine_version', version)
