@@ -652,6 +652,24 @@ STD_DIRECT_ACK_SCHEMA = {
             ]
         }
     ],
+    0x2F : [ 
+        {   'name' :'ext_aldb_ack', #ACK is diff for std and ext sent messages
+            'DevCat' : 'all',
+            'value' : [
+                {   'SubCat' : 'all', 
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : [
+                                {   'Cmd2' : 'all',
+                                    'value' : lambda x, y : None
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
     0x44 : [ 
         {   'name' :'sprinkler_control', 
             'DevCat' : 'all',
@@ -956,7 +974,7 @@ COMMAND_SCHEMA = {
                                 'usr_2'   : 0x00, #Read ALDB
                                 'usr_3'   : lambda x: x.msb, #Addr Hi
                                 'usr_4'   : lambda x: x.lsb, #Addr Low
-                                'usr_5'   : 0x00, #0x00 = All, 0x01 = 1 Record 
+                                'usr_5'   : 0x01, #0x00 = All, 0x01 = 1 Record 
                                 'usr_6'   : 0x00, #Unused
                                 'usr_7'   : 0x00, #Unused
                                 'usr_8'   : 0x00, #Unused

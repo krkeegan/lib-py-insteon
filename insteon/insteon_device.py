@@ -353,8 +353,14 @@ class Insteon_Device(Base_Device):
         self.send_command('peek_one_byte', 'query_aldb')
 
     def _ext_aldb_rcvd(self,msg):
-        self._msb = msg.get_byte_by_name('usr_3')
-        self._lsb = msg.get_byte_by_name('usr_4')
+        msg_msb = msg.get_byte_by_name('usr_3')
+        msg_lsb = msg.get_byte_by_name('usr_4')
+        if (self._lsb == 0x00 and self._msb == 0x00):
+            self._lsb = msg_lsb
+            self._msb = msg_msb
+        elif (self._lsb != msg_lsb or self._msb != msg_msb):
+            #this is not the record that we requested
+            return
         aldb_entry = bytearray([
             msg.get_byte_by_name('usr_6'),
             msg.get_byte_by_name('usr_7'),
@@ -366,12 +372,21 @@ class Insteon_Device(Base_Device):
             msg.get_byte_by_name('usr_13')
         ])
         self._aldb.edit_record(self._get_aldb_key(),aldb_entry)
+        self.last_msg.insteon_msg.device_ack = True
         if self.state_machine == 'query_aldb':
             if self.is_last_aldb(self._get_aldb_key()):
                 self.remove_state_machine('query_aldb')
-                #TODO check if received a complete ALDB?
+                #this is the last entry on this device
+                records = self._aldb.get_all_records()
+                for key in sorted(records):
+                    print (key, ":", BYTE_TO_HEX(records[key]))
             else:
-                self.update_state_machine('query_aldb')
+                if self.lsb == 0x07:
+                    self._msb -= 1
+                    self._lsb = 0xFF
+                else:
+                    self._lsb -= 8
+                self.send_command('read_aldb', 'query_aldb')
 
     def _set_engine_version(self,msg):
         version = msg.get_byte_by_name('cmd_2')
