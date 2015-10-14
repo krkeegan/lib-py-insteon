@@ -17,7 +17,6 @@ class Insteon_Device(Base_Device):
         self._msb = ''
         self._lsb = ''
         self._recent_inc_msgs = {}
-        self._hop_array = []
         if (self.attribute('dev_cat') is None or
                 self.attribute('sub_cat') is None or
                 self.attribute('firmware') is None):
@@ -172,15 +171,22 @@ class Insteon_Device(Base_Device):
 
     def _add_to_hop_tracking(self,msg):
         hops_used = msg.insteon_msg.max_hops - msg.insteon_msg.hops_left
-        self._hop_array.append(hops_used)
-        extra_data = len(self._hop_array) - 10
+        hop_array = self.attribute('hop_array')
+        if hop_array is None:
+            hop_array = []
+        hop_array.append(hops_used)
+        extra_data = len(hop_array) - 10
         if extra_data > 0:
-            self._hop_array = self._hop_array[extra_data:]
+            hop_array = hop_array[extra_data:]
+        self.attribute('hop_array', hop_array)
 
     @property
     def smart_hops(self):
-        if len(self._hop_array):
-            avg = sum(self._hop_array) / float(len(self._hop_array))
+        if self.attribute('hop_array') is not None:
+            avg = ( 
+                    sum(self.attribute('hop_array')) /
+                    float(len(self.attribute('hop_array')))
+                  )
         else:
             avg = 3
         return math.ceil(avg)
