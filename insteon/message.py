@@ -84,6 +84,7 @@ class PLM_Message(object):
         if self.is_incomming:
             msg_direction = 'rcvd_len'
         if msg_direction in self.plm_schema:
+            self._msg_byte_length = self.plm_schema[msg_direction]
             self._raw_msg = bytearray(self.plm_schema[msg_direction][0])
             self._raw_msg[0] = 0x02
             self._raw_msg[1] = plm_prefix
@@ -124,7 +125,7 @@ class PLM_Message(object):
         'plm_resp_e' in self.attribute_positions:
             byte_pos = self.attribute_positions['plm_resp']
             if 'plm_resp_e' in self.attribute_positions:
-                byte_pos_e = self.attribute_positions['plm_resp']
+                byte_pos_e = self.attribute_positions['plm_resp_e']
                 if byte_pos_e < len(self.raw_msg):
                     byte_pos = byte_pos_e
             return self.raw_msg[byte_pos]
@@ -236,6 +237,10 @@ class Insteon_Message(object):
                 self._parent._insert_byte_into_raw(byte, name)
 
     def _construct_insteon_send(self,dev_cmd):
+        if dev_cmd['msg_length'] == 'extended':
+            length_array = self._parent._msg_byte_length
+            addl_length = length_array[1] - length_array[0]
+            self._parent._raw_msg.extend(bytearray(addl_length))
         msg_flags = self._construct_msg_flags(dev_cmd)
         self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
         self._parent._insert_byte_into_raw(self._parent.device.dev_id_hi,'to_addr_hi')

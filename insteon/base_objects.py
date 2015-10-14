@@ -119,9 +119,8 @@ class Base_Device(object):
         sent to the device, all other messages will wait in a queue.  
         To avoid locking up a device, a state will automatically be 
         eliminated if it has not been updated within 5 seconds. You 
-        can update a state by setting the state machine to the same 
-        value again or sending a command with the appropriate state 
-        value'''
+        can update a state by calling update_state_machine or sending 
+        a command with the appropriate state value'''
         if self._state_machine_time <= (time.time() - 5) or \
         self._state_machine == 'default':
             #Always check for states other than default
@@ -148,6 +147,12 @@ class Base_Device(object):
         if value == self.state_machine:
             print('finished', self.state_machine)
             self._state_machine = 'default'
+            self._state_machine_time = time.time()
+        else:
+            print(value, 'was not the active state_machine')
+
+    def update_state_machine(self,value):
+        if value == self.state_machine:
             self._state_machine_time = time.time()
         else:
             print(value, 'was not the active state_machine')

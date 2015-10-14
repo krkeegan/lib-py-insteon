@@ -720,6 +720,28 @@ STD_DIRECT_ACK_SCHEMA = {
     ]
 }
 
+#Extended Direct Messages
+EXT_DIRECT_SCHEMA = {
+    0x2F : [
+        {   'name'  : 'aldb_entry',
+            'DevCat' : 'all',
+            'value' : [
+                {   'SubCat' : 'all', 
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : [
+                                {   'Cmd2' : (0x00,),
+                                    'value' : lambda x, y : x._ext_aldb_rcvd(y)
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
 # Outgoing message formats
 COMMAND_SCHEMA = {
     #CmdName
@@ -913,6 +935,38 @@ COMMAND_SCHEMA = {
                                 'cmd_1'   : 0x2B,
                                 'cmd_2'   : lambda x: x.lsb,
                                 'msg_length' : 'standard',
+                                'message_type' : 'direct'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    'read_aldb' : [
+        {   'DevCat' : 'all',
+            'value'  : [
+                {   'SubCat' : 'all',
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : {
+                                'cmd_1'   : 0x2F,
+                                'cmd_2'   : 0x00,
+                                'usr_1'   : 0x00, #Unused
+                                'usr_2'   : 0x00, #Read ALDB
+                                'usr_3'   : lambda x: x.msb, #Addr Hi
+                                'usr_4'   : lambda x: x.lsb, #Addr Low
+                                'usr_5'   : 0x00, #0x00 = All, 0x01 = 1 Record 
+                                'usr_6'   : 0x00, #Unused
+                                'usr_7'   : 0x00, #Unused
+                                'usr_8'   : 0x00, #Unused
+                                'usr_9'   : 0x00, #Unused
+                                'usr_10'  : 0x00, #Unused
+                                'usr_11'  : 0x00, #Unused
+                                'usr_12'  : 0x00, #Unused
+                                'usr_13'  : 0x00, #Unused
+                                'usr_14'  : 0x00, #Unused
+                                'msg_length' : 'extended',
                                 'message_type' : 'direct'
                             }
                         }

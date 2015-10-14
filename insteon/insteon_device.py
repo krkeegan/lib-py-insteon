@@ -62,7 +62,9 @@ class Insteon_Device(Base_Device):
         if self._is_duplicate(msg):
             print ('Skipped duplicate msg')
             return
-        if msg.insteon_msg.message_type == 'direct_ack':
+        if msg.insteon_msg.message_type == 'direct':
+            self._process_direct_msg(msg)
+        elif msg.insteon_msg.message_type == 'direct_ack':
             self._process_direct_ack(msg)
         elif msg.insteon_msg.message_type == 'broadcast':
             self.attribute('dev_cat', msg.get_byte_by_name('to_addr_hi'))
@@ -94,6 +96,28 @@ class Insteon_Device(Base_Device):
                 i += 1
             for position in reversed(to_delete):
                 del self._device_msg_queue[state][position]
+
+    def _process_direct_msg(self,msg):
+        '''processes an incomming direct message'''
+        self._add_to_hop_tracking(msg)
+        if (msg.insteon_msg.msg_length == 'extended' and 
+                msg.get_byte_by_name('cmd_1') in EXT_DIRECT_SCHEMA):
+            command = EXT_DIRECT_SCHEMA[msg.get_byte_by_name('cmd_1')]
+            search_list = [
+                ['DevCat'    , self.attribute('dev_cat')],
+                ['SubCat'    , self.attribute('sub_cat')],
+                ['Firmware'  , self.attribute('firmware')],
+                ['Cmd2'      , msg.get_byte_by_name('cmd_2')]
+            ]
+            for search_item in search_list:
+                command = self._recursive_search_cmd(command,search_item)
+                if not command:
+                    print('not sure how to respond to this')
+                    return
+            command(self,msg)
+        else:
+            print('direct message, that I dont know how to handle')
+            pprint.pprint(msg.__dict__)
 
     def _process_direct_ack(self,msg):
         '''processes an incomming direct ack message'''
@@ -252,9 +276,14 @@ class Insteon_Device(Base_Device):
             return False
 
     def query_aldb (self):
-        self._msb = 0x0F
-        self._lsb = 0xF8
-        self.send_command('set_address_msb', 'query_aldb')
+        if self.attribute('engine_version') == 0:
+            self._msb = 0x0F
+            self._lsb = 0xF8
+            self.send_command('set_address_msb', 'query_aldb')
+        else:
+            self._msb = 0x00
+            self._lsb = 0x00
+            self.send_command('read_aldb', 'query_aldb')
 
     def _get_aldb_key(self):
         offset = 7 - (self.lsb % 8)
@@ -316,6 +345,27 @@ class Insteon_Device(Base_Device):
 
     def peek_aldb (self):
         self.send_command('peek_one_byte', 'query_aldb')
+
+    def _ext_aldb_rcvd(self,msg):
+        self._msb = msg.get_byte_by_name('usr_3')
+        self._lsb = msg.get_byte_by_name('usr_4')
+        aldb_entry = bytearray([
+            msg.get_byte_by_name('usr_6'),
+            msg.get_byte_by_name('usr_7'),
+            msg.get_byte_by_name('usr_8'),
+            msg.get_byte_by_name('usr_9'),
+            msg.get_byte_by_name('usr_10'),
+            msg.get_byte_by_name('usr_11'),
+            msg.get_byte_by_name('usr_12'),
+            msg.get_byte_by_name('usr_13')
+        ])
+        self._aldb.edit_record(self._get_aldb_key(),aldb_entry)
+        if self.state_machine == 'query_aldb':
+            if self.is_last_aldb(self._get_aldb_key()):
+                self.remove_state_machine('query_aldb')
+                #TODO check if received a complete ALDB?
+            else:
+                self.update_state_machine('query_aldb')
 
     def _set_engine_version(self,msg):
         version = msg.get_byte_by_name('cmd_2')
