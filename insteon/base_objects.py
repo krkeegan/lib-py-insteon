@@ -216,7 +216,7 @@ class Base_Device(object):
         elif 'insteon_cmd' in kwargs:
             for msg in reversed(self._out_history):
                 if msg.insteon_msg and \
-                msg.device_cmd_name == kwargs['insteon_cmd']:
+                msg.insteon_msg.device_cmd_name == kwargs['insteon_cmd']:
                     ret = msg
                     break
         return ret
