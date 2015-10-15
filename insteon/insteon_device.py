@@ -136,25 +136,26 @@ class Insteon_Device(Base_Device):
             #TODO, we want to change aldb_deltas that are at 0x00
             self.status = msg.get_byte_by_name('cmd_2')
             self.last_msg.insteon_msg.device_ack = True
-        elif msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
-            command = STD_DIRECT_ACK_SCHEMA[msg.get_byte_by_name('cmd_1')]
-            search_list = [
-                ['DevCat'    , self.attribute('dev_cat')],
-                ['SubCat'    , self.attribute('sub_cat')],
-                ['Firmware'  , self.attribute('firmware')],
-                ['Cmd2'      , self.last_msg.get_byte_by_name('cmd_2')]
-            ]
-            for search_item in search_list:
-                command = self._recursive_search_cmd(command,search_item)
-                if not command:
-                    print('not sure how to respond to this')
-                    return
-            command(self,msg)
-            self.last_msg.insteon_msg.device_ack = True
         elif (self.last_msg.get_byte_by_name('cmd_1') == 
                 msg.get_byte_by_name('cmd_1')):
-            print('rcvd ack, nothing to do')
-            self.last_msg.insteon_msg.device_ack = True
+            if msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
+                command = STD_DIRECT_ACK_SCHEMA[msg.get_byte_by_name('cmd_1')]
+                search_list = [
+                    ['DevCat'    , self.attribute('dev_cat')],
+                    ['SubCat'    , self.attribute('sub_cat')],
+                    ['Firmware'  , self.attribute('firmware')],
+                    ['Cmd2'      , self.last_msg.get_byte_by_name('cmd_2')]
+                ]
+                for search_item in search_list:
+                    command = self._recursive_search_cmd(command,search_item)
+                    if not command:
+                        print('not sure how to respond to this')
+                        return
+                command(self,msg)
+                self.last_msg.insteon_msg.device_ack = True
+            else:
+                print('rcvd ack, nothing to do')
+                self.last_msg.insteon_msg.device_ack = True
         else:
             print('ignoring an unmatched ack')
             pprint.pprint(msg.__dict__)
@@ -299,8 +300,10 @@ class Insteon_Device(Base_Device):
     
     def ack_set_msb (self, msg):
         '''currently called when set_address_msb ack received'''
-        if self.state_machine == 'query_aldb' and \
-           self.msb == msg.get_byte_by_name('cmd_2'):
+        if (self.state_machine == 'query_aldb' and 
+               (self.last_msg.get_byte_by_name('cmd_2') == 
+                msg.get_byte_by_name('cmd_2'))
+               ):
             self.peek_aldb()
 
     def ack_peek_aldb(self,msg):
@@ -313,14 +316,14 @@ class Insteon_Device(Base_Device):
                 self.lsb % 8, 
                 msg.get_byte_by_name('cmd_2')
             )
-            if self.is_last_aldb(self._get_aldb_key()):
+            if self._aldb.is_last_aldb(self._get_aldb_key()):
                 #this is the last entry on this device
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
                     print (key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
                 self.send_command('light_status_request', 'set_aldb_delta')
-            elif self.is_empty_aldb(self._get_aldb_key()):
+            elif self._aldb.is_empty_aldb(self._get_aldb_key()):
                 #this is an empty record
                 print('empty record')
                 self._lsb = self.lsb - (8 + (self.lsb % 8))
@@ -336,18 +339,6 @@ class Insteon_Device(Base_Device):
             else:
                 self._lsb += 1
                 self.peek_aldb()
-
-    def is_last_aldb(self,key):
-        ret = True
-        if self._aldb.get_record(key)[0] & 0b00000010:
-            ret = False
-        return ret
-
-    def is_empty_aldb(self,key):
-        ret = True
-        if self._aldb.get_record(key)[0] & 0b10000000:
-            ret = False
-        return ret
 
     def peek_aldb (self):
         self.send_command('peek_one_byte', 'query_aldb')
@@ -374,7 +365,7 @@ class Insteon_Device(Base_Device):
         self._aldb.edit_record(self._get_aldb_key(),aldb_entry)
         self.last_msg.insteon_msg.device_ack = True
         if self.state_machine == 'query_aldb':
-            if self.is_last_aldb(self._get_aldb_key()):
+            if self._aldb.is_last_aldb(self._get_aldb_key()):
                 self.remove_state_machine('query_aldb')
                 #this is the last entry on this device
                 records = self._aldb.get_all_records()

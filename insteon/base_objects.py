@@ -86,6 +86,18 @@ class ALDB(object):
         low = parsed_record['dev_low']
         return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high,mid,low))
 
+    def is_last_aldb(self,key):
+        ret = True
+        if self.get_record(key)[0] & 0b00000010:
+            ret = False
+        return ret
+
+    def is_empty_aldb(self,key):
+        ret = True
+        if self.get_record(key)[0] & 0b10000000:
+            ret = False
+        return ret
+
 class Base_Device(object):
     #TODO Store Device State
     def __init__(self, core, plm, **kwargs):
