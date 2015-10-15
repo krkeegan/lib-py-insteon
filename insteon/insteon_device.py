@@ -380,6 +380,7 @@ class Insteon_Device(Base_Device):
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
                     print (key, ":", BYTE_TO_HEX(records[key]))
+                self.send_command('light_status_request', 'set_aldb_delta')
             else:
                 if self.lsb == 0x07:
                     self._msb -= 1
