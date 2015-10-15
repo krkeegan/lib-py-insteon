@@ -230,6 +230,8 @@ class PLM(Base_Device):
 
     def write(self, msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
+        if msg.insteon_msg:
+            msg.insteon_msg._set_i2cs_checksum()
         print(now, 'sending data', BYTE_TO_HEX(msg.raw_msg))
         msg.time_sent = time.time()
         self._serial.write(msg.raw_msg)

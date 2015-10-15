@@ -282,6 +282,27 @@ class Insteon_Message(object):
         msg_flags = msg_flags | self._parent.device.smart_hops
         return msg_flags
 
+    def _set_i2cs_checksum(self):
+        if (self.msg_length =='extended' and 
+                self._parent.device.attribute('engine_version') == 0x02):
+            #Sum Relevant Bytes
+            keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 
+                'usr_3', 'usr_4', 'usr_5', 'usr_6',
+                'usr_7', 'usr_8', 'usr_9', 'usr_10', 
+                'usr_11', 'usr_12', 'usr_13')
+            bytesum = 0
+            for key in keys:
+                bytesum += self._parent.get_byte_by_name(key)
+            #Flip Bits
+            bytesum = ~ bytesum
+            #Add 1
+            bytesum += 1
+            #Truncate to a byte
+            bytesum = bytesum & 0b11111111
+            #Set User_14
+            self._parent._insert_byte_into_raw(bytesum,'usr_14')
+            return
+
     @property
     def device_retry(self):
         return self._device_retry
