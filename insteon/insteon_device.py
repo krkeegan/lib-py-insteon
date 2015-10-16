@@ -39,11 +39,6 @@ class Insteon_Device(Base_Device):
             bytes([self._dev_id_hi,self._dev_id_mid,self._dev_id_low]))
         return ret
 
-    def _dev_id_str_to_bytes(self, dev_id_str):
-        self._dev_id_hi = int(dev_id_str[0:2], 16)
-        self._dev_id_mid = int(dev_id_str[2:4], 16)
-        self._dev_id_low = int(dev_id_str[4:6], 16)
-
     @property
     def dev_id_hi(self):
         return self._dev_id_hi
