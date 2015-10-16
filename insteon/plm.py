@@ -359,11 +359,8 @@ class PLM(Base_Device):
         self.wait_to_send = .5
 
     def rcvd_aldb_record(self,msg):
-        self.add_aldb_to_cache(msg.raw_msg[2:])
+        self._aldb.add_record(msg.raw_msg[2:])
         self.send_command('all_link_next_rec', 'query_aldb')
-
-    def add_aldb_to_cache(self,aldb):
-        self._aldb.add_plm_record(aldb)
 
     def end_of_aldb(self,msg):
         self._last_msg.plm_ack = True
@@ -382,7 +379,7 @@ class PLM(Base_Device):
             link_flag = 0xA2
             if msg.get_byte_by_name('link_code') == 0x01:
                 link_flag = 0xE2
-            self.add_aldb_to_cache(bytearray([link_flag, msg.raw_msg[3:]]))
+            self._aldb.add_record(bytearray([link_flag, msg.raw_msg[3:]]))
 
     def rcvd_btn_event(self,msg):
         print("The PLM Button was pressed")
@@ -416,12 +413,6 @@ class PLM(Base_Device):
         else:
             print("X10 Command House Code did not match expected House Code")
             print("Message ignored")
-
-    def query_aldb (self):
-        '''Queries the PLM for a list of the link records saved on
-        the PLM and stores them in the cache'''
-        self._aldb.clear_all_records()
-        self.send_command('all_link_first_rec', 'query_aldb')
 
     def rcvd_all_link_clean_status(self,msg):
         if self._last_msg.plm_cmd_type == 'all_link_send':

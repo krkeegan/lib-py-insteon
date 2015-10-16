@@ -137,8 +137,14 @@ class Device_ALDB(ALDB):
             self._parent.send_command('read_aldb', 'query_aldb')
 
 class PLM_ALDB(ALDB):
-    def temp(self):
-        pass
+    def add_record(self,aldb):
+        self._aldb.add_plm_record(aldb)
+
+    def query_aldb (self):
+        '''Queries the PLM for a list of the link records saved on
+        the PLM and stores them in the cache'''
+        self._aldb.clear_all_records()
+        self.send_command('all_link_first_rec', 'query_aldb')
 
 class Base_Device(object):
     #TODO Store Device State
