@@ -933,7 +933,7 @@ COMMAND_SCHEMA = {
                         {   'Firmware' : 'all',
                             'value' : {
                                 'cmd_1'   :0x28,
-                                'cmd_2'   : lambda x: x.msb,
+                                'cmd_2'   : lambda x: x._aldb.msb,
                                 'msg_length' : 'standard',
                                 'message_type' : 'direct'
                             }
@@ -951,7 +951,7 @@ COMMAND_SCHEMA = {
                         {   'Firmware' : 'all',
                             'value' : {
                                 'cmd_1'   : 0x2B,
-                                'cmd_2'   : lambda x: x.lsb,
+                                'cmd_2'   : lambda x: x._aldb.lsb,
                                 'msg_length' : 'standard',
                                 'message_type' : 'direct'
                             }
@@ -972,8 +972,8 @@ COMMAND_SCHEMA = {
                                 'cmd_2'   : 0x00,
                                 'usr_1'   : 0x00, #Unused
                                 'usr_2'   : 0x00, #Read ALDB
-                                'usr_3'   : lambda x: x.msb, #Addr Hi
-                                'usr_4'   : lambda x: x.lsb, #Addr Low
+                                'usr_3'   : lambda x: x._aldb.msb, #Addr Hi
+                                'usr_4'   : lambda x: x._aldb.lsb, #Addr Low
                                 'usr_5'   : 0x01, #0x00 = All, 0x01 = 1 Record 
                                 'usr_6'   : 0x00, #Unused
                                 'usr_7'   : 0x00, #Unused

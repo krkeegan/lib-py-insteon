@@ -2,20 +2,20 @@ import math
 import time
 import pprint
 
-from .base_objects import Base_Device, ALDB
+from .base_objects import Base_Device, Device_ALDB
 from .msg_schema import *
 from .message import PLM_Message, Insteon_Message
 from .helpers import *
 
 class Insteon_Device(Base_Device):
     def __init__(self, core, plm, **kwargs):
+        self._aldb = Device_ALDB(self)
         super().__init__(core, plm, **kwargs)
-        self._dev_id_str_to_bytes(kwargs['device_id'])
+        id_bytes = ID_STR_TO_BYTES(kwargs['device_id'])
+        self._dev_id_hi = id_bytes[0]
+        self._dev_id_mid = id_bytes[1]
+        self._dev_id_low = id_bytes[2]
         self.last_msg = ''
-        self._aldb_delta = ''
-        self.status = ''
-        self._msb = ''
-        self._lsb = ''
         self._recent_inc_msgs = {}
         if (self.attribute('dev_cat') is None or
                 self.attribute('sub_cat') is None or
@@ -24,14 +24,6 @@ class Insteon_Device(Base_Device):
         if self.attribute('engine_version') is None:
             self.send_command('get_engine_version')
         self.send_command('light_status_request')
-
-    @property
-    def msb(self):
-        return self._msb
-
-    @property
-    def lsb(self):
-        return self._lsb
 
     @property
     def device_id_str(self):
@@ -127,9 +119,9 @@ class Insteon_Device(Base_Device):
                 self.remove_state_machine('set_aldb_delta')
             elif self.attribute('aldb_delta') != aldb_delta:
                 print('aldb has changed, rescanning')
-                self.query_aldb()
+                self._aldb.query_aldb()
             #TODO, we want to change aldb_deltas that are at 0x00
-            self.status = msg.get_byte_by_name('cmd_2')
+            self.attribute('status',msg.get_byte_by_name('cmd_2'))
             self.last_msg.insteon_msg.device_ack = True
         elif (self.last_msg.get_byte_by_name('cmd_1') == 
                 msg.get_byte_by_name('cmd_1')):
@@ -276,22 +268,6 @@ class Insteon_Device(Base_Device):
             return catch_all_cmd
         else:
             return False
-
-    def query_aldb (self):
-        if self.attribute('engine_version') == 0:
-            self._msb = 0x0F
-            self._lsb = 0xF8
-            self.send_command('set_address_msb', 'query_aldb')
-        else:
-            self._msb = 0x00
-            self._lsb = 0x00
-            self.send_command('read_aldb', 'query_aldb')
-
-    def _get_aldb_key(self):
-        offset = 7 - (self.lsb % 8)
-        highest_byte = self.lsb + offset
-        key = bytes([self.msb, highest_byte])
-        return BYTE_TO_HEX(key)
     
     def ack_set_msb (self, msg):
         '''currently called when set_address_msb ack received'''
@@ -304,35 +280,35 @@ class Insteon_Device(Base_Device):
     def ack_peek_aldb(self,msg):
         if self.state_machine == 'query_aldb' and \
            self.last_msg.insteon_msg.device_cmd_name == 'peek_one_byte':
-            if (self.lsb % 8) == 0:
-                self._aldb.edit_record(self._get_aldb_key(),bytearray(8))
+            if (self._aldb.lsb % 8) == 0:
+                self._aldb.edit_record(self._aldb._get_aldb_key(),bytearray(8))
             self._aldb.edit_record_byte(
-                self._get_aldb_key(),
-                self.lsb % 8, 
+                self._aldb._get_aldb_key(),
+                self._aldb.lsb % 8, 
                 msg.get_byte_by_name('cmd_2')
             )
-            if self._aldb.is_last_aldb(self._get_aldb_key()):
+            if self._aldb.is_last_aldb(self._aldb._get_aldb_key()):
                 #this is the last entry on this device
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
                     print (key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
                 self.send_command('light_status_request', 'set_aldb_delta')
-            elif self._aldb.is_empty_aldb(self._get_aldb_key()):
+            elif self._aldb.is_empty_aldb(self._aldb._get_aldb_key()):
                 #this is an empty record
                 print('empty record')
-                self._lsb = self.lsb - (8 + (self.lsb % 8))
+                self._aldb.lsb = self._aldb.lsb - (8 + (self._aldb.lsb % 8))
                 self.peek_aldb()
-            elif self.lsb == 7:
+            elif self._aldb.lsb == 7:
                 #Change MSB
-                self._msb -= 1
-                self._lsb = 0xF8
+                self._aldb.msb -= 1
+                self._aldb.lsb = 0xF8
                 self.send_command('set_address_msb', 'query_aldb')
-            elif (self.lsb % 8) == 7:
-                self._lsb -= 15
+            elif (self._aldb.lsb % 8) == 7:
+                self._aldb.lsb -= 15
                 self.peek_aldb()
             else:
-                self._lsb += 1
+                self._aldb.lsb += 1
                 self.peek_aldb()
 
     def peek_aldb (self):
@@ -341,10 +317,10 @@ class Insteon_Device(Base_Device):
     def _ext_aldb_rcvd(self,msg):
         msg_msb = msg.get_byte_by_name('usr_3')
         msg_lsb = msg.get_byte_by_name('usr_4')
-        if (self._lsb == 0x00 and self._msb == 0x00):
-            self._lsb = msg_lsb
-            self._msb = msg_msb
-        elif (self._lsb != msg_lsb or self._msb != msg_msb):
+        if (self._aldb.lsb == 0x00 and self._aldb.msb == 0x00):
+            self._aldb.lsb = msg_lsb
+            self._aldb.msb = msg_msb
+        elif (self._aldb.lsb != msg_lsb or self._aldb.msb != msg_msb):
             #this is not the record that we requested
             return
         aldb_entry = bytearray([
@@ -357,10 +333,10 @@ class Insteon_Device(Base_Device):
             msg.get_byte_by_name('usr_12'),
             msg.get_byte_by_name('usr_13')
         ])
-        self._aldb.edit_record(self._get_aldb_key(),aldb_entry)
+        self._aldb.edit_record(self._aldb._get_aldb_key(),aldb_entry)
         self.last_msg.insteon_msg.device_ack = True
         if self.state_machine == 'query_aldb':
-            if self._aldb.is_last_aldb(self._get_aldb_key()):
+            if self._aldb.is_last_aldb(self._aldb._get_aldb_key()):
                 self.remove_state_machine('query_aldb')
                 #this is the last entry on this device
                 records = self._aldb.get_all_records()
@@ -368,11 +344,11 @@ class Insteon_Device(Base_Device):
                     print (key, ":", BYTE_TO_HEX(records[key]))
                 self.send_command('light_status_request', 'set_aldb_delta')
             else:
-                if self.lsb == 0x07:
-                    self._msb -= 1
-                    self._lsb = 0xFF
+                if self._aldb.lsb == 0x07:
+                    self._aldb.msb -= 1
+                    self._aldb.lsb = 0xFF
                 else:
-                    self._lsb -= 8
+                    self._aldb.lsb -= 8
                 self.send_command('read_aldb', 'query_aldb')
 
     def _set_engine_version(self,msg):

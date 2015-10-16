@@ -3,7 +3,7 @@ import time
 import datetime
 
 from .insteon_device import Insteon_Device
-from .base_objects import Base_Device, ALDB
+from .base_objects import Base_Device, PLM_ALDB
 from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
@@ -61,6 +61,7 @@ class PLM_Group(object):
 class PLM(Base_Device):
     def __init__(self, core, **kwargs):
         self._devices = {}
+        self._aldb = PLM_ALDB(self)
         super().__init__(core, self, **kwargs)
         self._read_buffer = bytearray()
         self._last_msg = ''

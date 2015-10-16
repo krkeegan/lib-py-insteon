@@ -98,6 +98,48 @@ class ALDB(object):
             ret = False
         return ret
 
+class Device_ALDB(ALDB):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._msb = ''
+        self._lsb = ''
+
+    @property
+    def msb(self):
+        return self._msb
+
+    @msb.setter
+    def msb(self,value):
+        self._msb = value
+
+    @property
+    def lsb(self):
+        return self._lsb
+
+    @lsb.setter
+    def lsb(self,value):
+        self._lsb = value
+
+    def _get_aldb_key(self):
+        offset = 7 - (self.lsb % 8)
+        highest_byte = self.lsb + offset
+        key = bytes([self.msb, highest_byte])
+        return BYTE_TO_HEX(key)
+
+    def query_aldb (self):
+        if self._parent.attribute('engine_version') == 0:
+            self._msb = 0x0F
+            self._lsb = 0xF8
+            self._parent.send_command('set_address_msb', 'query_aldb')
+        else:
+            self._msb = 0x00
+            self._lsb = 0x00
+            self._parent.send_command('read_aldb', 'query_aldb')
+
+class PLM_ALDB(ALDB):
+    def temp(self):
+        pass
+
 class Base_Device(object):
     #TODO Store Device State
     def __init__(self, core, plm, **kwargs):
@@ -108,7 +150,6 @@ class Base_Device(object):
         self._device_msg_queue = {}
         self._attributes = {}
         self._out_history = []
-        self._aldb = ALDB(self)
         if 'attributes' in kwargs:
             self._load_attributes(kwargs['attributes'])
 
