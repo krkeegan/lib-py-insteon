@@ -94,7 +94,7 @@ class PLM(Base_Device):
         if self.device_id == '':
             self.send_command('plm_info')
         if self._aldb.have_aldb_cache() == False:
-            self.query_aldb()
+            self._aldb.query_aldb()
         self._groups = []
         for group in range (0x02, 0xFF):
             self._groups.append(PLM_Group(self,group))
@@ -281,11 +281,11 @@ class PLM(Base_Device):
             return
         if msg.insteon_msg and msg.insteon_msg.device_ack == False:
             total_hops = msg.insteon_msg.max_hops *2
-            hop_delay = 50 if msg.insteon_msg.msg_length == 'standard' else 109
+            hop_delay = 75 if msg.insteon_msg.msg_length == 'standard' else 200
             # Add 1 additional second based on trial and error, perhaps
             # to allow device to 'think'
             total_delay = (total_hops * hop_delay/1000) + 1
-            if msg.time_sent < time.time() - total_delay:
+            if msg.time_plm_ack < time.time() - total_delay:
                 print(
                     now, 
                     'device failed to ack a message, total delay =', 
@@ -341,6 +341,7 @@ class PLM(Base_Device):
                 and msg.raw_msg[0:-1] == self._last_msg.raw_msg):
             if msg.plm_resp_ack:
                 self._last_msg.plm_ack = True
+                self._last_msg.time_plm_ack = time.time()
             elif msg.plm_resp_nack:
                 if 'nack_act' in msg.plm_schema:
                     msg.plm_schema['nack_act'](self, msg)

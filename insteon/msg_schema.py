@@ -992,5 +992,37 @@ COMMAND_SCHEMA = {
                 }
             ]
         }
+    ],
+    'write_aldb' : [
+        {   'DevCat' : 'all',
+            'value'  : [
+                {   'SubCat' : 'all',
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : {
+                                'cmd_1'   : 0x2F,
+                                'cmd_2'   : 0x00,
+                                'usr_1'   : 0x00, #Unused
+                                'usr_2'   : 0x02, #Write ALDB
+                                'usr_3'   : lambda x: x._aldb.msb, #Addr Hi
+                                'usr_4'   : lambda x: x._aldb.lsb, #Addr Low
+                                'usr_5'   : 0x08, #Write 8Bytes
+                                'usr_6'   : 0x00, #Record
+                                'usr_7'   : 0x00, #Record
+                                'usr_8'   : 0x00, #Record
+                                'usr_9'   : 0x00, #Record
+                                'usr_10'  : 0x00, #Record
+                                'usr_11'  : 0x00, #Record
+                                'usr_12'  : 0x00, #Record
+                                'usr_13'  : 0x00, #Record
+                                'usr_14'  : 0x00, #Unused
+                                'msg_length' : 'extended',
+                                'message_type' : 'direct'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
     ]
 }

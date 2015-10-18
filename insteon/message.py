@@ -45,6 +45,14 @@ class PLM_Message(object):
     def time_sent(self,value):
         self._time_sent = value
 
+    @property
+    def time_plm_ack(self):
+        return self._time_plm_ack
+
+    @time_plm_ack.setter
+    def time_plm_ack(self,value):
+        self._time_plm_ack = value
+
     def msg_from_raw(self, **kwargs):
         if 'raw_data' not in kwargs:
             return

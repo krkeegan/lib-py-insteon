@@ -101,8 +101,8 @@ class ALDB(object):
 class Device_ALDB(ALDB):
     def __init__(self, parent):
         super().__init__(parent)
-        self._msb = ''
-        self._lsb = ''
+        self._msb = 0x00
+        self._lsb = 0x00
 
     @property
     def msb(self):
@@ -138,13 +138,13 @@ class Device_ALDB(ALDB):
 
 class PLM_ALDB(ALDB):
     def add_record(self,aldb):
-        self._aldb.add_plm_record(aldb)
+        self.add_plm_record(aldb)
 
     def query_aldb (self):
         '''Queries the PLM for a list of the link records saved on
         the PLM and stores them in the cache'''
-        self._aldb.clear_all_records()
-        self.send_command('all_link_first_rec', 'query_aldb')
+        self.clear_all_records()
+        self._parent.send_command('all_link_first_rec', 'query_aldb')
 
 class Base_Device(object):
     #TODO Store Device State
@@ -228,7 +228,7 @@ class Base_Device(object):
         state = self.state_machine
         if state not in self._device_msg_queue:
             self._device_msg_queue[state] = []
-        self._device_msg_queue[state].append(message)
+        self._device_msg_queue[state].insert(0,message)
         self._state_machine_time = time.time()
 
     def pop_device_queue(self):
