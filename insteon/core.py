@@ -51,7 +51,11 @@ class Insteon_Core(object):
             ret = PLM(self, device_id=device_id, attributes=attributes)
         elif 'port' in kwargs:
             port = kwargs['port']
-            ret = PLM(self, device_id=device_id, port=port)
+            for plm in self._plms:
+                if plm.attribute('port') == port:
+                    ret = plm
+            if ret is None:
+                ret = PLM(self, device_id=device_id, port=port)
         else:
             print('you need to define a port for this plm')
         if ret is not None:
