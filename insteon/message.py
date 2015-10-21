@@ -18,6 +18,8 @@ class PLM_Message(object):
         self._insteon_msg = {}
         self._creation_time = time.time()
         self._time_sent = 0
+        self._plm_success_callback = lambda : None
+        self._msg_failed_callback = lambda : None
         if 'is_incomming' in kwargs: self._is_incomming = True
         self._device = None
         if 'device' in kwargs:
@@ -193,6 +195,8 @@ class PLM_Message(object):
     @failed.setter
     def failed(self,boolean):
         self._failed = boolean
+        if boolean == True
+            self._msg_failed_callback()
 
     @property
     def plm_ack(self):
@@ -201,6 +205,8 @@ class PLM_Message(object):
     @plm_ack.setter
     def plm_ack(self,boolean):
         self._plm_ack = boolean
+        if boolean == True:
+            self.plm_success_callback()
 
     @property
     def plm_retry(self):
@@ -230,6 +236,25 @@ class PLM_Message(object):
     def seq_time(self,int):
         self._seq_time = int
 
+    @property
+    def plm_success_callback(self):
+        '''Function to run on successful plm ack'''
+        return self._plm_success_callback
+
+    @plm_success_callback.setter
+    def plm_success_callback(self, value):
+        self._plm_success_callback = value
+
+    @property
+    def msg_failure_callback(self):
+        '''Function to run on failure of message.  Could be either a
+        PLM or Device Nack or failure'''
+        return self._msg_failed_callback
+
+    @msg_failure_callback.setter
+    def msg_failure_callback(self, value):
+        self._msg_failed_callback = value
+
 class Insteon_Message(object):
     def __init__(self, parent, **kwargs):
         self._device_ack = False
@@ -237,6 +262,7 @@ class Insteon_Message(object):
         self._cmd_schema = {}
         self._device_cmd_name = ''
         self._parent = parent
+        self._device_success_callback = lambda : None
         #Need to reinitialize the message length??? Extended message
         if 'dev_cmd' in kwargs:
             self._construct_insteon_send(kwargs['dev_cmd'])
@@ -414,4 +440,14 @@ class Insteon_Message(object):
     @device_ack.setter
     def device_ack(self,boolean):
         self._device_ack = boolean
+        if boolean == True:
+            self.device_success_callback()
 
+    @property
+    def device_success_callback(self):
+        '''Function to run on successful device ack'''
+        return self._device_success_callback
+
+    @device_success_callback.setter
+    def device_success_callback(self, value):
+        self._device_success_callback = value

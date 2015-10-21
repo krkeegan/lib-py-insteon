@@ -353,7 +353,6 @@ class Insteon_Device(Base_Device):
     def _set_engine_version(self,msg):
         version = msg.get_byte_by_name('cmd_2')
         if version >= 0xFB:
-            print('in special case')
             #Insteon Hack
             #Some I2CS Devices seem to have a bug in that they ack
             #a message when they mean to nack it, but the cmd_2
