@@ -121,6 +121,11 @@ class PLM_Message(object):
         self._raw_msg[pos] = data_byte
         return
 
+    def _insert_bytes_into_raw(self,byte_dict):
+        for name, byte in byte_dict.items():
+            self._insert_byte_into_raw(byte, name)
+        return
+
     #Read Message Bytes
     @property
     def attribute_positions(self):

@@ -369,6 +369,11 @@ class Insteon_Device(Base_Device):
     ###################################################################
 
     def send_command(self, command_name, state = '', dev_bytes = {}):
+        message = self.create_message(command_name)
+        message._insert_bytes_into_raw(dev_bytes)
+        self._queue_device_msg(message, state)
+
+    def create_message(self, command_name):
         try:
             cmd_schema = COMMAND_SCHEMA[command_name]
         except Exception as e:
@@ -390,9 +395,8 @@ class Insteon_Device(Base_Device):
         message = PLM_Message(self.plm, 
                               device=self, 
                               plm_cmd='insteon_send', 
-                              dev_cmd=command, 
-                              dev_bytes=dev_bytes)
-        self._queue_device_msg(message, state)
+                              dev_cmd=command)
+        return message
 
     def _recursive_search_cmd (self,command,search_item):
         unique_cmd = ''
