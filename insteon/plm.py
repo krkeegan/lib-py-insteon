@@ -251,10 +251,15 @@ class PLM(Base_Device):
             self.attribute('firmware', msg_obj.get_byte_by_name('firmware'))
 
     def send_command(self,command, state = '', plm_bytes = {}):
+        message = self.create_message(command)
+        message._insert_bytes_into_raw(plm_bytes)
+        self._queue_device_msg(message, state)
+
+    def create_message(self, command):
         message = PLM_Message(
             self, device=self, 
-            plm_cmd=command, plm_bytes=plm_bytes)
-        self._queue_device_msg(message, state)
+            plm_cmd=command)
+        return message
 
     def process_unacked_msg(self):
         '''checks for unacked messages'''

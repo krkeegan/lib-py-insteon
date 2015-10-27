@@ -200,7 +200,7 @@ class PLM_Message(object):
     @failed.setter
     def failed(self,boolean):
         self._failed = boolean
-        if boolean == True
+        if boolean == True:
             self._msg_failed_callback()
 
     @property
