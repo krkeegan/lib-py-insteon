@@ -104,7 +104,8 @@ class Insteon_Device(Base_Device):
 
     def _process_direct_msg(self,msg):
         '''processes an incomming direct message'''
-        self._add_to_hop_tracking(msg)
+        hops_used = self._hops_used_from_msg(msg)
+        self._add_to_hop_array(hops_used)
         if (msg.insteon_msg.msg_length == 'extended' and 
                 msg.get_byte_by_name('cmd_1') in EXT_DIRECT_SCHEMA):
             command = EXT_DIRECT_SCHEMA[msg.get_byte_by_name('cmd_1')]
@@ -126,7 +127,8 @@ class Insteon_Device(Base_Device):
 
     def _process_direct_ack(self,msg):
         '''processes an incomming direct ack message'''
-        self._add_to_hop_tracking(msg)
+        hops_used = self._hops_used_from_msg(msg)
+        self._add_to_hop_array(hops_used)
         if not self._is_valid_direct_ack(msg):
             return
         elif (self.last_msg.insteon_msg.device_cmd_name == 
@@ -168,7 +170,8 @@ class Insteon_Device(Base_Device):
 
     def _process_direct_nack(self,msg):
         '''processes an incomming direct nack message'''
-        self._add_to_hop_tracking(msg)
+        hops_used = self._hops_used_from_msg(msg)
+        self._add_to_hop_array(hops_used)
         if not self._is_valid_direct_ack(msg):
             return
         elif (self.last_msg.get_byte_by_name('cmd_1') == 
@@ -219,8 +222,10 @@ class Insteon_Device(Base_Device):
             ret = False
         return ret
 
-    def _add_to_hop_tracking(self,msg):
-        hops_used = msg.insteon_msg.max_hops - msg.insteon_msg.hops_left
+    def _hops_used_from_msg(self,msg):
+        return msg.insteon_msg.max_hops - msg.insteon_msg.hops_left
+
+    def _add_to_hop_array(self,hops_used):
         hop_array = self.attribute('hop_array')
         if hop_array is None:
             hop_array = []

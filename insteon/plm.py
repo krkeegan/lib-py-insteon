@@ -219,10 +219,12 @@ class PLM(Base_Device):
         self._last_msg = msg
         self.write(msg)
     
-    def _resend_msg(self):
+    def _resend_failed_msg(self):
         msg = self._last_msg
         msg.plm_ack = False
-        msg.device_ack = False
+        if msg._insteon_msg:
+            msg._insteon_msg.hops_left += 1
+            msg._insteon_msg.max_hops += 1
         self._last_msg = {}
         if msg._device:
             msg._device._resend_msg(msg)
@@ -277,7 +279,7 @@ class PLM(Base_Device):
                     msg.failed = True
                 else:
                     msg.plm_retry += 1
-                    self._resend_msg()
+                    self._resend_failed_msg()
             return
         if msg.seq_lock == True: 
             if msg.time_sent < time.time() - msg.seq_time:
@@ -287,6 +289,8 @@ class PLM(Base_Device):
         if msg.insteon_msg and msg.insteon_msg.device_ack == False:
             total_hops = msg.insteon_msg.max_hops *2
             hop_delay = 75 if msg.insteon_msg.msg_length == 'standard' else 200
+            # Increase delay on each subsequent retry
+            hop_delay = (msg.insteon_msg.device_retry + 1) * hop_delay
             # Add 1 additional second based on trial and error, perhaps
             # to allow device to 'think'
             total_delay = (total_hops * hop_delay/1000) + 1
@@ -302,7 +306,7 @@ class PLM(Base_Device):
                     msg.failed = True
                 else:
                     msg.insteon_msg.device_retry += 1
-                    self._resend_msg()
+                    self._resend_failed_msg()
             return
 
     def process_queue(self):

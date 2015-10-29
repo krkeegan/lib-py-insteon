@@ -404,6 +404,20 @@ class Insteon_Message(object):
             ret = hops_left >> 2
         return ret
 
+    @hops_left.setter
+    def hops_left(self,value):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        if value < 0:
+            value = 0
+        if value > 3:
+            value = 3
+        #clear the hops left
+        msg_flags = msg_flags & 0b11110011
+        #set the hops left
+        value = value << 2
+        msg_flags = msg_flags | value
+        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
+
     @property
     def max_hops(self):
         msg_flags = self._parent.get_byte_by_name('msg_flags')
@@ -411,6 +425,19 @@ class Insteon_Message(object):
         if msg_flags:
             ret = msg_flags & 0b00000011
         return ret
+
+    @max_hops.setter
+    def max_hops(self,value):
+        msg_flags = self._parent.get_byte_by_name('msg_flags')
+        if value < 0:
+            value = 0
+        if value > 3:
+            value = 3
+        #clear the max hops
+        msg_flags = msg_flags & 0b11111100
+        #set the max hops
+        msg_flags = msg_flags | value
+        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
 
     @property
     def to_addr_str(self):
@@ -446,6 +473,7 @@ class Insteon_Message(object):
     def device_ack(self,boolean):
         self._device_ack = boolean
         if boolean == True:
+            self._parent.device._add_to_hop_array(self.max_hops)
             self.device_success_callback()
 
     @property
