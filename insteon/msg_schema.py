@@ -273,11 +273,18 @@ PLM_SCHEMA = {
     },
     0x64: {
         'rcvd_len' : (5,),
+        'send_len' : (4,),
+        'recv_act' : lambda obj, msg: obj.rcvd_all_link_start(msg),
+        'recv_obj' : lambda self : self.plm,
         'name'     : 'all_link_start',
         'recv_byte_pos'    : {
             'link_code' : 2,
             'group'     : 3,
             'plm_resp'  : 4
+        },
+        'send_byte_pos'    : {
+            'link_code' : 2, #0x00 Responder, 0x01 Controller, 0x03 Dynamic, 0xFF Delete
+            'group'     : 3
         }
     },
     0x65: {
@@ -773,6 +780,38 @@ COMMAND_SCHEMA = {
                                 'cmd_1'   : 0x03,
                                 'cmd_2'   : 0x00,
                                 'msg_length' : 'standard',
+                                'message_type' : 'direct'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    'enter_link_mode' : [
+        {   'DevCat' : 'all',
+            'value'  : [
+                {   'SubCat' : 'all',
+                    'value' : [
+                        {   'Firmware' : 'all',
+                            'value' : {
+                                'cmd_1'   : 0x09,
+                                'cmd_2'   : 0x00, #The group to link
+                                'usr_1'   : 0x00, #Unused
+                                'usr_2'   : 0x00, #Unused
+                                'usr_3'   : 0x00, #Unused
+                                'usr_4'   : 0x00, #Unused
+                                'usr_5'   : 0x00, #Unused
+                                'usr_6'   : 0x00, #Unused
+                                'usr_7'   : 0x00, #Unused
+                                'usr_8'   : 0x00, #Unused
+                                'usr_9'   : 0x00, #Unused
+                                'usr_10'  : 0x00, #Unused
+                                'usr_11'  : 0x00, #Unused
+                                'usr_12'  : 0x00, #Unused
+                                'usr_13'  : 0x00, #Unused
+                                'usr_14'  : 0x00, #Unused
+                                'msg_length' : 'extended',
                                 'message_type' : 'direct'
                             }
                         }

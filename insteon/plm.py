@@ -385,7 +385,10 @@ class PLM(Base_Device):
             link_flag = 0xA2
             if msg.get_byte_by_name('link_code') == 0x01:
                 link_flag = 0xE2
-            self._aldb.add_record(bytearray([link_flag, msg.raw_msg[3:]]))
+            record = bytearray(8)
+            record[0] = link_flag
+            record[1:8] = msg.raw_msg[3:]
+            self._aldb.add_record(record)
 
     def rcvd_btn_event(self,msg):
         print("The PLM Button was pressed")
@@ -453,3 +456,7 @@ class PLM(Base_Device):
                 ret = group
                 break
         return ret
+
+    def rcvd_all_link_start(self,msg):
+        if msg.plm_resp_ack:
+            self._last_msg.plm_ack = True

@@ -174,23 +174,30 @@ class Insteon_Device(Base_Device):
         elif (self.last_msg.get_byte_by_name('cmd_1') == 
                 msg.get_byte_by_name('cmd_1')):
             if (self.attribute('engine_version') == 0x02 or
-                self.attribute('engine_version') is None):
+                self.attribute('engine_version') == None):
                 cmd_2 = msg.get_byte_by_name('cmd_2')
                 if cmd_2 == 0xFF:
                     print('nack received, senders ID not in database')
+                    self.attribute('engine_version', 0x02)
                     self.last_msg.insteon_msg.device_ack = True
+                    print('creating plm->device link')
+                    self.add_plm_to_dev_link()
                 elif cmd_2 == 0xFE:
                     print('nack received, no load')
+                    self.attribute('engine_version', 0x02)
                     self.last_msg.insteon_msg.device_ack = True
                 elif cmd_2 == 0xFD:
                     print('nack received, checksum is incorrect, resending')
+                    self.attribute('engine_version', 0x02)
                     self.plm.wait_to_send = 1
                     self._resend_msg(self.last_msg)
                 elif cmd_2 == 0xFC:
                     print('nack received, Pre nack in case database search takes too long')
+                    self.attribute('engine_version', 0x02)
                     self.last_msg.insteon_msg.device_ack = True
                 elif cmd_2 == 0xFB:
                     print('nack received, illegal value in command')
+                    self.attribute('engine_version', 0x02)
                     self.last_msg.insteon_msg.device_ack = True
                 else:
                     print('device nack`ed the last command, no further details, resending')
@@ -270,6 +277,12 @@ class Insteon_Device(Base_Device):
         total_delay = hop_delay * msg.insteon_msg.hops_left
         expire_time = time.time() + (total_delay / 1000)
         self._recent_inc_msgs[search_key] = expire_time
+
+    ###################################################################
+    ##
+    ##  Specific Incoming Message Handling
+    ##
+    ###################################################################
 
     def ack_set_msb (self, msg):
         '''currently called when set_address_msb ack received'''
@@ -390,7 +403,7 @@ class Insteon_Device(Base_Device):
                 cmd_schema = self._recursive_search_cmd(cmd_schema,search_item)
                 if not cmd_schema:
                     #TODO figure out some way to allow queuing prior to dev cat?
-                    print('command not available for this device')
+                    print(command_name, ' not available for this device')
                     break
             if cmd_schema:
                 command = cmd_schema.copy()
@@ -423,4 +436,39 @@ class Insteon_Device(Base_Device):
     def write_aldb_record(self,msb,lsb):
         dev_bytes = {'usr_3' : msb, 'usr_4' : lsb}
         self.send_command('write_aldb', '', dev_bytes = dev_bytes)
-    
+
+    def add_plm_to_dev_link(self):
+        #Put the PLM in Linking Mode 
+        #queues a message on the PLM
+        message = self.plm.create_message('all_link_start')
+        plm_bytes = {
+            'link_code' : 0x01,
+            'group'     : 0x00,
+        }
+        message._insert_bytes_into_raw(plm_bytes)
+        message.plm_success_callback = self.add_plm_to_dev_link_step2
+        message.msg_failure_callback = self.add_plm_to_dev_link_fail
+        self.plm._queue_device_msg(message, 'link plm->device')
+
+    def add_plm_to_dev_link_step2(self):
+        #Put Device in linking mode
+        message = self.create_message('enter_link_mode')
+        dev_bytes = {
+            'cmd_2'     : 0x00
+        }
+        message._insert_bytes_into_raw(dev_bytes)
+        message.insteon_msg.device_success_callback = (
+                                                self.add_plm_to_dev_link_step3
+                                                      )
+        message.msg_failure_callback = self.add_plm_to_dev_link_fail
+        self._queue_device_msg(message, 'link plm->device')
+
+    def add_plm_to_dev_link_step3(self):
+        print('plm->device link created')
+        self.plm.remove_state_machine('link plm->device')
+        self.remove_state_machine('link plm->device')
+
+    def add_plm_to_dev_link_fail(self):
+        print('Error, unable to create plm->device link')
+        self.plm.remove_state_machine('link plm->device')
+        self.remove_state_machine('link plm->device')
