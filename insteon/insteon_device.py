@@ -17,12 +17,23 @@ class Insteon_Device(Base_Device):
         self._dev_id_low = id_bytes[2]
         self.last_msg = ''
         self._recent_inc_msgs = {}
+        self._init_step_1()
+
+    def _init_step_1(self):
         if self.attribute('engine_version') is None:
             self.send_command('get_engine_version')
+        else:
+            self._init_step_2()
+
+    def _init_step_2(self):
         if (self.attribute('dev_cat') is None or
                 self.attribute('sub_cat') is None or
                 self.attribute('firmware') is None):
             self.send_command('id_request')
+        else:
+            self._init_step_3()
+
+    def _init_step_3(self):
         self.send_command('light_status_request')
 
     @property
@@ -76,6 +87,8 @@ class Insteon_Device(Base_Device):
             self.attribute('sub_cat', msg.get_byte_by_name('to_addr_mid'))
             self.attribute('firmware', msg.get_byte_by_name('to_addr_low'))
             print('rcvd, broadcast updated devcat, subcat, and firmware')
+            #Continue the init steps
+            self._init_step_3()
         elif msg.insteon_msg.message_type == 'alllink_cleanup_ack':
             #TODO set state of the device based on cmd acked
             # Clear queued cleanup messages if they exist
@@ -379,6 +392,8 @@ class Insteon_Device(Base_Device):
             self._process_direct_nack(msg)
         else:
             self.attribute('engine_version', version)
+            # Continue init step
+            self._init_step_2()
 
     ###################################################################
     ## 
@@ -469,9 +484,14 @@ class Insteon_Device(Base_Device):
         self._queue_device_msg(message, 'link plm->device')
 
     def add_plm_to_dev_link_step3(self):
+        print('device in linking mode')
+
+    def add_plm_to_dev_link_step4(self):
         print('plm->device link created')
         self.plm.remove_state_machine('link plm->device')
         self.remove_state_machine('link plm->device')
+        # Next init step
+        self._init_step_2()
 
     def add_plm_to_dev_link_fail(self):
         print('Error, unable to create plm->device link')

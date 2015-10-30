@@ -1,4 +1,4 @@
-import time
+import time, datetime
 import pprint
 
 from .helpers import *
@@ -177,14 +177,15 @@ class Base_Device(object):
         Whenever a state is set, only messages of that state will be 
         sent to the device, all other messages will wait in a queue.  
         To avoid locking up a device, a state will automatically be 
-        eliminated if it has not been updated within 5 seconds. You 
+        eliminated if it has not been updated within 8 seconds. You 
         can update a state by calling update_state_machine or sending 
         a command with the appropriate state value'''
-        if self._state_machine_time <= (time.time() - 5) or \
+        if self._state_machine_time <= (time.time() - 8) or \
         self._state_machine == 'default':
             #Always check for states other than default
             if self._state_machine != 'default':
-                print (self._state_machine, "state expired")
+                now = datetime.datetime.now().strftime("%M:%S.%f")
+                print (now, self._state_machine, "state expired")
                 pprint.pprint(self._device_msg_queue)
             self._state_machine = self._get_next_state_machine()
             if self._state_machine != 'default':

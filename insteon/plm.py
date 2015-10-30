@@ -393,6 +393,10 @@ class PLM(Base_Device):
             record[0] = link_flag
             record[1:8] = msg.raw_msg[3:]
             self._aldb.add_record(record)
+            #notify the linked device
+            device_id = BYTE_TO_ID(record[2],record[3],record[4])
+            device = self.get_device_by_addr(device_id)
+            device.add_plm_to_dev_link_step4()
 
     def rcvd_btn_event(self,msg):
         print("The PLM Button was pressed")
