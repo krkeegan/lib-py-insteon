@@ -70,6 +70,7 @@ class PLM(Base_Device):
         self._last_x10_house = ''
         self._last_x10_unit = ''
         self.device_id = ''
+        self.port_active = True
         if 'device_id' in kwargs:
             self.device_id = kwargs['device_id']
         port = ''
@@ -80,17 +81,18 @@ class PLM(Base_Device):
         else:
             print('you need to define a port for this plm')
         self.attribute('port', port)
-        if port != 'test_fixture':
+        try: 
             self._serial = serial.Serial(
-                        port=port,
-                        baudrate=19200,
-                        parity=serial.PARITY_NONE,
-                        stopbits=serial.STOPBITS_ONE,
-                        bytesize=serial.EIGHTBITS,
-                        timeout=0
-                        )
-        else:
-            self._serial = 'test_fixture'
+                    port=port,
+                    baudrate=19200,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    bytesize=serial.EIGHTBITS,
+                    timeout=0
+                    )
+        except serial.serialutil.SerialException:
+            print('unable to connect to port', port)
+            self.port_active = False
         if self.device_id == '':
             self.send_command('plm_info')
         if self._aldb.have_aldb_cache() == False:
@@ -120,8 +122,9 @@ class PLM(Base_Device):
 
     def _read(self):
         '''Reads bytes from PLM and loads them into a buffer'''
-        while self._serial.inWaiting() > 0:
-            self._read_buffer.extend(self._serial.read())
+        if self.port_active:
+            while self._serial.inWaiting() > 0:
+                self._read_buffer.extend(self._serial.read())
 
     def process_input(self):
         '''Reads available bytes from PLM, then parses the bytes
@@ -235,9 +238,18 @@ class PLM(Base_Device):
         now = datetime.datetime.now().strftime("%M:%S.%f")
         if msg.insteon_msg:
             msg.insteon_msg._set_i2cs_checksum()
-        print(now, 'sending data', BYTE_TO_HEX(msg.raw_msg))
-        msg.time_sent = time.time()
-        self._serial.write(msg.raw_msg)
+        if self.port_active:
+            print(now, 'sending data', BYTE_TO_HEX(msg.raw_msg))
+            msg.time_sent = time.time()
+            self._serial.write(msg.raw_msg)
+        else:
+            msg.failed = True
+            print(
+                now, 
+                'Error: the port', 
+                self.attribute('port'), 
+                'is not active, unable to send message'
+            )
         return
 
     def plm_info(self,msg_obj):
