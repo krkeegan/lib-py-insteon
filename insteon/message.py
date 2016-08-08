@@ -3,8 +3,10 @@ import time
 from .msg_schema import *
 from .helpers import *
 
+
 class PLM_Message(object):
-    #Initialization Functions
+    # Initialization Functions
+
     def __init__(self, plm, **kwargs):
         self._plm = plm
         self._plm_ack = False
@@ -18,9 +20,10 @@ class PLM_Message(object):
         self._insteon_msg = {}
         self._creation_time = time.time()
         self._time_sent = 0
-        self._plm_success_callback = lambda : None
-        self._msg_failed_callback = lambda : None
-        if 'is_incomming' in kwargs: self._is_incomming = True
+        self._plm_success_callback = lambda: None
+        self._msg_failed_callback = lambda: None
+        if 'is_incomming' in kwargs:
+            self._is_incomming = True
         self._device = None
         if 'device' in kwargs:
             self._device = kwargs['device']
@@ -44,7 +47,7 @@ class PLM_Message(object):
         return self._time_sent
 
     @time_sent.setter
-    def time_sent(self,value):
+    def time_sent(self, value):
         self._time_sent = value
 
     @property
@@ -52,7 +55,7 @@ class PLM_Message(object):
         return self._time_plm_ack
 
     @time_plm_ack.setter
-    def time_plm_ack(self,value):
+    def time_plm_ack(self, value):
         self._time_plm_ack = value
 
     def msg_from_raw(self, **kwargs):
@@ -82,14 +85,14 @@ class PLM_Message(object):
             plm_bytes = kwargs['plm_bytes']
             for key in plm_bytes:
                 if key in self.attribute_positions:
-                    self._insert_byte_into_raw(plm_bytes[key],key)
+                    self._insert_byte_into_raw(plm_bytes[key], key)
 
     def _init_insteon_msg(self, **kwargs):
-        if self.plm_schema['name'] in ['insteon_received', \
-        'insteon_ext_received', 'insteon_send']:
+        if self.plm_schema['name'] in ['insteon_received',
+                                       'insteon_ext_received', 'insteon_send']:
             self._insteon_msg = Insteon_Message(self, **kwargs)
 
-    def _initialize_raw_msg(self,plm_cmd,plm_prefix):
+    def _initialize_raw_msg(self, plm_cmd, plm_prefix):
         msg_direction = 'send_len'
         if self.is_incomming:
             msg_direction = 'rcvd_len'
@@ -103,7 +106,7 @@ class PLM_Message(object):
             return False
 
     # Set Bytes in Message
-    def _set_plm_schema(self,plm_cmd):
+    def _set_plm_schema(self, plm_cmd):
         plm_schema = False
         for plm_prefix, schema in PLM_SCHEMA.items():
             if schema['name'] == plm_cmd:
@@ -116,17 +119,17 @@ class PLM_Message(object):
             print("I don't know that plm command")
             return False
 
-    def _insert_byte_into_raw(self,data_byte,pos_name):
+    def _insert_byte_into_raw(self, data_byte, pos_name):
         pos = self.attribute_positions[pos_name]
         self._raw_msg[pos] = data_byte
         return
 
-    def _insert_bytes_into_raw(self,byte_dict):
+    def _insert_bytes_into_raw(self, byte_dict):
         for name, byte in byte_dict.items():
             self._insert_byte_into_raw(byte, name)
         return
 
-    #Read Message Bytes
+    # Read Message Bytes
     @property
     def attribute_positions(self):
         msg_direction = 'send_byte_pos'
@@ -137,7 +140,7 @@ class PLM_Message(object):
     @property
     def plm_resp_flag(self):
         if 'plm_resp' in self.attribute_positions or \
-        'plm_resp_e' in self.attribute_positions:
+                'plm_resp_e' in self.attribute_positions:
             byte_pos = self.attribute_positions['plm_resp']
             if 'plm_resp_e' in self.attribute_positions:
                 byte_pos_e = self.attribute_positions['plm_resp_e']
@@ -147,21 +150,21 @@ class PLM_Message(object):
         else:
             return False
 
-    @property 
+    @property
     def plm_resp_ack(self):
         ret = False
         if self.plm_resp_flag == 0x06:
             ret = True
         return ret
 
-    @property 
+    @property
     def plm_resp_nack(self):
         ret = False
         if self.plm_resp_flag == 0x15:
             ret = True
         return ret
 
-    @property 
+    @property
     def plm_resp_bad_cmd(self):
         ret = False
         if self.plm_resp_flag == 0x0F:
@@ -172,7 +175,7 @@ class PLM_Message(object):
     def raw_msg(self):
         return self._raw_msg.copy()
 
-    def get_byte_by_name(self,byte_name):
+    def get_byte_by_name(self, byte_name):
         ret = False
         if byte_name in self.attribute_positions:
             pos = self.attribute_positions[byte_name]
@@ -180,7 +183,7 @@ class PLM_Message(object):
                 ret = self.raw_msg[pos]
         return ret
 
-    #Message Meta Data
+    # Message Meta Data
     @property
     def plm_schema(self):
         return self._plm_schema.copy()
@@ -198,7 +201,7 @@ class PLM_Message(object):
         return self._failed
 
     @failed.setter
-    def failed(self,boolean):
+    def failed(self, boolean):
         self._failed = boolean
         if boolean == True:
             self._msg_failed_callback()
@@ -208,7 +211,7 @@ class PLM_Message(object):
         return self._plm_ack
 
     @plm_ack.setter
-    def plm_ack(self,boolean):
+    def plm_ack(self, boolean):
         self._plm_ack = boolean
         if boolean == True:
             self.plm_success_callback()
@@ -218,7 +221,7 @@ class PLM_Message(object):
         return self._plm_retry
 
     @plm_retry.setter
-    def plm_retry(self,count):
+    def plm_retry(self, count):
         self._plm_retry = count
 
     @property
@@ -230,7 +233,7 @@ class PLM_Message(object):
         return self._seq_lock
 
     @seq_lock.setter
-    def seq_lock(self,boolean):
+    def seq_lock(self, boolean):
         self._seq_lock = boolean
 
     @property
@@ -238,7 +241,7 @@ class PLM_Message(object):
         return self._seq_time
 
     @seq_time.setter
-    def seq_time(self,int):
+    def seq_time(self, int):
         self._seq_time = int
 
     @property
@@ -260,57 +263,60 @@ class PLM_Message(object):
     def msg_failure_callback(self, value):
         self._msg_failed_callback = value
 
+
 class Insteon_Message(object):
+
     def __init__(self, parent, **kwargs):
         self._device_ack = False
         self._device_retry = 0
         self._cmd_schema = {}
         self._device_cmd_name = ''
         self._parent = parent
-        self._device_success_callback = lambda : None
-        #Need to reinitialize the message length??? Extended message
+        self._device_success_callback = lambda: None
+        # Need to reinitialize the message length??? Extended message
         if 'dev_cmd' in kwargs:
             self._construct_insteon_send(kwargs['dev_cmd'])
         if 'dev_bytes' in kwargs:
             for name, byte in kwargs['dev_bytes'].items():
                 self._parent._insert_byte_into_raw(byte, name)
 
-    def _construct_insteon_send(self,dev_cmd):
+    def _construct_insteon_send(self, dev_cmd):
         if dev_cmd['msg_length'] == 'extended':
             length_array = self._parent._msg_byte_length
             addl_length = length_array[1] - length_array[0]
             self._parent._raw_msg.extend(bytearray(addl_length))
         msg_flags = self._construct_msg_flags(dev_cmd)
-        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
-        self._parent._insert_byte_into_raw(self._parent.device.dev_id_hi,'to_addr_hi')
+        self._parent._insert_byte_into_raw(msg_flags, 'msg_flags')
         self._parent._insert_byte_into_raw(
-            self._parent.device.dev_id_mid,'to_addr_mid')
+            self._parent.device.dev_id_hi, 'to_addr_hi')
         self._parent._insert_byte_into_raw(
-            self._parent.device.dev_id_low,'to_addr_low')
+            self._parent.device.dev_id_mid, 'to_addr_mid')
+        self._parent._insert_byte_into_raw(
+            self._parent.device.dev_id_low, 'to_addr_low')
         # Process functions if they exist
-        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 
+        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2',
                 'usr_3', 'usr_4', 'usr_5', 'usr_6',
-                'usr_7', 'usr_8', 'usr_9', 'usr_10', 
+                'usr_7', 'usr_8', 'usr_9', 'usr_10',
                 'usr_11', 'usr_12', 'usr_13', 'usr_14')
-        #could shorten this by just searching for callable keys in command
+        # could shorten this by just searching for callable keys in command
         for key in keys:
             if key in dev_cmd and callable(dev_cmd[key]):
                 value = dev_cmd[key](self._parent.device)
-                self._parent._insert_byte_into_raw(value,key)
+                self._parent._insert_byte_into_raw(value, key)
             elif key in dev_cmd:
-                self._parent._insert_byte_into_raw(dev_cmd[key],key)
+                self._parent._insert_byte_into_raw(dev_cmd[key], key)
         self._device_cmd_name = dev_cmd['name']
 
-    def _construct_msg_flags(self,dev_cmd):
+    def _construct_msg_flags(self, dev_cmd):
         msg_types = {
-            'broadcast'             : 4,
-            'direct'                : 0,
-            'direct_ack'            : 1,
-            'direct_nack'           : 5,
-            'alllink_broadcast'     : 6,
-            'alllink_cleanup'       : 2, 
-            'alllink_cleanup_ack'   : 3,
-            'alllink_cleanup_nack'  : 7,
+            'broadcast': 4,
+            'direct': 0,
+            'direct_ack': 1,
+            'direct_nack': 5,
+            'alllink_broadcast': 6,
+            'alllink_cleanup': 2,
+            'alllink_cleanup_ack': 3,
+            'alllink_cleanup_nack': 7,
         }
         msg_flags = msg_types[dev_cmd['message_type']]
         msg_flags = msg_flags << 5
@@ -322,33 +328,33 @@ class Insteon_Message(object):
         return msg_flags
 
     def _set_i2cs_checksum(self):
-        if (self.msg_length =='extended' and 
+        if (self.msg_length == 'extended' and
                 self._parent.device.attribute('engine_version') == 0x02):
             checksum = self._calculate_i2cs_checksum()
-            self._parent._insert_byte_into_raw(checksum,'usr_14')
+            self._parent._insert_byte_into_raw(checksum, 'usr_14')
             return
 
     def _calculate_i2cs_checksum(self):
-        #Sum Relevant Bytes
-        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2', 
-            'usr_3', 'usr_4', 'usr_5', 'usr_6',
-            'usr_7', 'usr_8', 'usr_9', 'usr_10', 
-            'usr_11', 'usr_12', 'usr_13')
+        # Sum Relevant Bytes
+        keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2',
+                'usr_3', 'usr_4', 'usr_5', 'usr_6',
+                'usr_7', 'usr_8', 'usr_9', 'usr_10',
+                'usr_11', 'usr_12', 'usr_13')
         bytesum = 0
         for key in keys:
             bytesum += self._parent.get_byte_by_name(key)
-        #Flip Bits
+        # Flip Bits
         bytesum = ~ bytesum
-        #Add 1
+        # Add 1
         bytesum += 1
-        #Truncate to a byte
+        # Truncate to a byte
         bytesum = bytesum & 0b11111111
         return bytesum
 
     @property
     def valid_i2cs_checksum(self):
         ret = False
-        if (self._parent.get_byte_by_name('usr_14') == 
+        if (self._parent.get_byte_by_name('usr_14') ==
                 self._calculate_i2cs_checksum()):
             ret = True
         return ret
@@ -358,7 +364,7 @@ class Insteon_Message(object):
         return self._device_retry
 
     @device_retry.setter
-    def device_retry(self,count):
+    def device_retry(self, count):
         self._device_retry = count
 
     @property
@@ -371,14 +377,14 @@ class Insteon_Message(object):
         ret = False
         if msg_flags:
             msg_types = {
-                4:'broadcast',
-                0:'direct',
-                1:'direct_ack',
-                5:'direct_nack',
-                6:'alllink_broadcast',
-                2:'alllink_cleanup',
-                3:'alllink_cleanup_ack',
-                7:'alllink_cleanup_nack'
+                4: 'broadcast',
+                0: 'direct',
+                1: 'direct_ack',
+                5: 'direct_nack',
+                6: 'alllink_broadcast',
+                2: 'alllink_cleanup',
+                3: 'alllink_cleanup_ack',
+                7: 'alllink_cleanup_nack'
             }
             message_type = msg_flags & 0b11100000
             message_type = message_type >> 5
@@ -405,18 +411,18 @@ class Insteon_Message(object):
         return ret
 
     @hops_left.setter
-    def hops_left(self,value):
+    def hops_left(self, value):
         msg_flags = self._parent.get_byte_by_name('msg_flags')
         if value < 0:
             value = 0
         if value > 3:
             value = 3
-        #clear the hops left
+        # clear the hops left
         msg_flags = msg_flags & 0b11110011
-        #set the hops left
+        # set the hops left
         value = value << 2
         msg_flags = msg_flags | value
-        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
+        self._parent._insert_byte_into_raw(msg_flags, 'msg_flags')
 
     @property
     def max_hops(self):
@@ -427,17 +433,17 @@ class Insteon_Message(object):
         return ret
 
     @max_hops.setter
-    def max_hops(self,value):
+    def max_hops(self, value):
         msg_flags = self._parent.get_byte_by_name('msg_flags')
         if value < 0:
             value = 0
         if value > 3:
             value = 3
-        #clear the max hops
+        # clear the max hops
         msg_flags = msg_flags & 0b11111100
-        #set the max hops
+        # set the max hops
         msg_flags = msg_flags | value
-        self._parent._insert_byte_into_raw(msg_flags,'msg_flags')
+        self._parent._insert_byte_into_raw(msg_flags, 'msg_flags')
 
     @property
     def to_addr_str(self):
@@ -446,9 +452,9 @@ class Insteon_Message(object):
             byte_pos_mid = self._parent.attribute_positions['to_addr_mid']
             byte_pos_low = self._parent.attribute_positions['to_addr_low']
             return BYTE_TO_HEX(bytes((self._parent.raw_msg[byte_pos_hi],
-                                       self._parent.raw_msg[byte_pos_mid],
-                                       self._parent.raw_msg[byte_pos_low],
-            )))
+                                      self._parent.raw_msg[byte_pos_mid],
+                                      self._parent.raw_msg[byte_pos_low],
+                                      )))
         else:
             return False
 
@@ -459,9 +465,9 @@ class Insteon_Message(object):
             byte_pos_mid = self._parent.attribute_positions['from_addr_mid']
             byte_pos_low = self._parent.attribute_positions['from_addr_low']
             return BYTE_TO_HEX(bytes((self._parent.raw_msg[byte_pos_hi],
-                                       self._parent.raw_msg[byte_pos_mid],
-                                       self._parent.raw_msg[byte_pos_low],
-            )))
+                                      self._parent.raw_msg[byte_pos_mid],
+                                      self._parent.raw_msg[byte_pos_low],
+                                      )))
         else:
             return False
 
@@ -470,7 +476,7 @@ class Insteon_Message(object):
         return self._device_ack
 
     @device_ack.setter
-    def device_ack(self,boolean):
+    def device_ack(self, boolean):
         self._device_ack = boolean
         if boolean == True:
             self._parent.device._add_to_hop_array(self.max_hops)

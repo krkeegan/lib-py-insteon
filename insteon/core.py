@@ -14,20 +14,22 @@ from .rest_server import *
 
 # TODO Load State
 
+
 class Insteon_Core(object):
     '''Provides global management functions'''
+
     def __init__(self):
         self._plms = []
         self._last_saved_time = 0
         self._load_state()
-        #Be sure to save before exiting
+        # Be sure to save before exiting
         atexit.register(self._save_state, True)
         signal.signal(signal.SIGINT, self._signal_handler)
 
     def start_rest_server(self):
-        server = http.server.HTTPServer(('', 8080),HTTPHandler)
+        server = http.server.HTTPServer(('', 8080), HTTPHandler)
         server.core = self
-        thread = threading.Thread(target = server.serve_forever, daemon = True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
 
     def loop_once(self):
@@ -39,7 +41,7 @@ class Insteon_Core(object):
             plm.process_queue()
         self._save_state()
 
-    def add_plm(self,**kwargs):
+    def add_plm(self, **kwargs):
         '''Inform the core of a plm that should be monitored as part
         of the core process'''
         device_id = ''
@@ -62,7 +64,7 @@ class Insteon_Core(object):
             self._plms.append(ret)
         return ret
 
-    def get_plm_by_id(self,id):
+    def get_plm_by_id(self, id):
         ret = None
         for plm in self._plms:
             if plm.device_id == id:
@@ -75,11 +77,11 @@ class Insteon_Core(object):
             ret.append(plm)
         return ret
 
-    def _save_state(self, is_exit = False):
-        #Saves the config of the entire core to a file
+    def _save_state(self, is_exit=False):
+        # Saves the config of the entire core to a file
         if self._last_saved_time < time.time() - 60 or is_exit:
-            #Save once a minute, on on exit
-            out_data = {'PLMs' : {}}
+            # Save once a minute, on on exit
+            out_data = {'PLMs': {}}
             for plm in self._plms:
                 plm_point = {}
                 plm_point = plm._attributes.copy()
@@ -91,9 +93,9 @@ class Insteon_Core(object):
                     dev_point['ALDB'] = device._aldb.get_all_records_str()
                     plm_point['Devices'][address] = dev_point
             try:
-                json_string = json.dumps(out_data, 
-                                         sort_keys = True, 
-                                         indent = 4, 
+                json_string = json.dumps(out_data,
+                                         sort_keys=True,
+                                         indent=4,
                                          ensure_ascii=False)
             except Exception:
                 print ('error writing config to file')
@@ -116,10 +118,10 @@ class Insteon_Core(object):
             print('unable to read config file, skipping')
         if 'PLMs' in read_data:
             for plm_id, plm_data in read_data['PLMs'].items():
-                self.add_plm(attributes=plm_data,device_id=plm_id)
+                self.add_plm(attributes=plm_data, device_id=plm_id)
 
     def _signal_handler(self, signal, frame):
-        #Catches a Ctrl + C and Saves the Config before exiting
+        # Catches a Ctrl + C and Saves the Config before exiting
         self._save_state(True)
         print('You pressed Ctrl+C!')
         sys.exit(0)

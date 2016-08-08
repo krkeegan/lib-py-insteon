@@ -1,11 +1,13 @@
 import http.server
 
+
 class HTTPHandler(http.server.BaseHTTPRequestHandler):
+
     def do_GET(self):
         if self.path == '/':
             self.send_html_headers()
             html = (
-'''
+                '''
 <html>
     <head>
         <title> Configuration </title>

@@ -1,17 +1,20 @@
-import time, datetime
+import time
+import datetime
 import pprint
 
 from .helpers import *
 
+
 class ALDB(object):
+
     def __init__(self, parent):
         self._parent = parent
         self._aldb = {}
 
-    def edit_record(self,position,record):
+    def edit_record(self, position, record):
         self._aldb[position] = record
 
-    def get_record(self,position):
+    def get_record(self, position):
         return self._aldb[position]
 
     def get_all_records(self):
@@ -29,22 +32,22 @@ class ALDB(object):
             ret = False
         return ret
 
-    def load_aldb_records(self,records):
+    def load_aldb_records(self, records):
         for key, record in records.items():
             self.edit_record(key, bytearray.fromhex(record))
 
     def clear_all_records(self):
         self._aldb = {}
 
-    def edit_record_byte(self,aldb_pos,byte_pos,byte):
+    def edit_record_byte(self, aldb_pos, byte_pos, byte):
         self._aldb[aldb_pos][byte_pos] = byte
 
-    def add_plm_record(self,record):
+    def add_plm_record(self, record):
         position = str(len(self._aldb) + 1)
         position = position.zfill(4)
         self._aldb[position] = record
 
-    def search_for_records(self,attributes):
+    def search_for_records(self, attributes):
         '''Performs an AND search for records on this device'''
         ret = []
         for position, record in self._aldb.items():
@@ -55,50 +58,52 @@ class ALDB(object):
                     ret.remove(position)
                     break
         return ret
-        
-    def parse_record(self,position):
+
+    def parse_record(self, position):
         bytes = self._aldb[position]
         parsed = {
-            'record_flag' : bytes[0],
-            'in_use'    :  bytes[0] & 0b10000000,
+            'record_flag': bytes[0],
+            'in_use':  bytes[0] & 0b10000000,
             'controller':  bytes[0] & 0b01000000,
-            'responder' : ~bytes[0] & 0b01000000,
-            'highwater' : ~bytes[0] & 0b00000010,
-            'group' : bytes[1],
-            'dev_hi' : bytes[2],
-            'dev_mid' : bytes[3],
-            'dev_low' : bytes[4],
-            'data_1' : bytes[5],
-            'data_2' : bytes[6],
-            'data_3' : bytes[7],
+            'responder': ~bytes[0] & 0b01000000,
+            'highwater': ~bytes[0] & 0b00000010,
+            'group': bytes[1],
+            'dev_hi': bytes[2],
+            'dev_mid': bytes[3],
+            'dev_low': bytes[4],
+            'data_1': bytes[5],
+            'data_2': bytes[6],
+            'data_3': bytes[7],
         }
-        for attr in ('in_use','controller','responder','highwater'):
+        for attr in ('in_use', 'controller', 'responder', 'highwater'):
             if parsed[attr]:
                 parsed[attr] = True
             else:
                 parsed[attr] = False
         return parsed
 
-    def linked_device(self,position):
+    def linked_device(self, position):
         parsed_record = self.parse_record(position)
         high = parsed_record['dev_hi']
         mid = parsed_record['dev_mid']
         low = parsed_record['dev_low']
-        return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high,mid,low))
+        return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high, mid, low))
 
-    def is_last_aldb(self,key):
+    def is_last_aldb(self, key):
         ret = True
         if self.get_record(key)[0] & 0b00000010:
             ret = False
         return ret
 
-    def is_empty_aldb(self,key):
+    def is_empty_aldb(self, key):
         ret = True
         if self.get_record(key)[0] & 0b10000000:
             ret = False
         return ret
 
+
 class Device_ALDB(ALDB):
+
     def __init__(self, parent):
         super().__init__(parent)
         self._msb = 0x00
@@ -109,7 +114,7 @@ class Device_ALDB(ALDB):
         return self._msb
 
     @msb.setter
-    def msb(self,value):
+    def msb(self, value):
         self._msb = value
 
     @property
@@ -117,7 +122,7 @@ class Device_ALDB(ALDB):
         return self._lsb
 
     @lsb.setter
-    def lsb(self,value):
+    def lsb(self, value):
         self._lsb = value
 
     def _get_aldb_key(self):
@@ -126,7 +131,7 @@ class Device_ALDB(ALDB):
         key = bytes([self.msb, highest_byte])
         return BYTE_TO_HEX(key)
 
-    def query_aldb (self):
+    def query_aldb(self):
         if self._parent.attribute('engine_version') == 0:
             self._msb = 0x0F
             self._lsb = 0xF8
@@ -136,18 +141,22 @@ class Device_ALDB(ALDB):
             self._lsb = 0x00
             self._parent.send_command('read_aldb', 'query_aldb')
 
+
 class PLM_ALDB(ALDB):
-    def add_record(self,aldb):
+
+    def add_record(self, aldb):
         self.add_plm_record(aldb)
 
-    def query_aldb (self):
+    def query_aldb(self):
         '''Queries the PLM for a list of the link records saved on
         the PLM and stores them in the cache'''
         self.clear_all_records()
         self._parent.send_command('all_link_first_rec', 'query_aldb')
 
+
 class Base_Device(object):
-    #TODO Store Device State
+    # TODO Store Device State
+
     def __init__(self, core, plm, **kwargs):
         self._core = core
         self._plm = plm
@@ -169,20 +178,20 @@ class Base_Device(object):
 
     @property
     def state_machine(self):
-        '''The state machine tracks the 'state' that the device is in. 
-        This is necessary because Insteon is not a stateless protocol, 
-        interpreting some incoming messages requires knowing what 
+        '''The state machine tracks the 'state' that the device is in.
+        This is necessary because Insteon is not a stateless protocol,
+        interpreting some incoming messages requires knowing what
         commands were previously issued to the device.
-        
-        Whenever a state is set, only messages of that state will be 
-        sent to the device, all other messages will wait in a queue.  
-        To avoid locking up a device, a state will automatically be 
-        eliminated if it has not been updated within 8 seconds. You 
-        can update a state by calling update_state_machine or sending 
+
+        Whenever a state is set, only messages of that state will be
+        sent to the device, all other messages will wait in a queue.
+        To avoid locking up a device, a state will automatically be
+        eliminated if it has not been updated within 8 seconds. You
+        can update a state by calling update_state_machine or sending
         a command with the appropriate state value'''
         if self._state_machine_time <= (time.time() - 8) or \
-        self._state_machine == 'default':
-            #Always check for states other than default
+                self._state_machine == 'default':
+            # Always check for states other than default
             if self._state_machine != 'default':
                 now = datetime.datetime.now().strftime("%M:%S.%f")
                 print (now, self._state_machine, "state expired")
@@ -203,7 +212,7 @@ class Base_Device(object):
                     msg_time = test_time
         return next_state
 
-    def remove_state_machine(self,value):
+    def remove_state_machine(self, value):
         if value == self.state_machine:
             print('finished', self.state_machine)
             self._state_machine = 'default'
@@ -211,32 +220,33 @@ class Base_Device(object):
         else:
             print(value, 'was not the active state_machine')
 
-    def update_state_machine(self,value):
+    def update_state_machine(self, value):
         if value == self.state_machine:
             self._state_machine_time = time.time()
         else:
             print(value, 'was not the active state_machine')
 
-    def _queue_device_msg(self,message,state):
-        if state == '': state = 'default'
+    def _queue_device_msg(self, message, state):
+        if state == '':
+            state = 'default'
         if state not in self._device_msg_queue:
             self._device_msg_queue[state] = []
         self._device_msg_queue[state].append(message)
 
-    def _resend_msg(self,message):
-        #This is a bit of a hack, assumes the state has not changed
-        #Maybe move state to the message class?
+    def _resend_msg(self, message):
+        # This is a bit of a hack, assumes the state has not changed
+        # Maybe move state to the message class?
         state = self.state_machine
         if state not in self._device_msg_queue:
             self._device_msg_queue[state] = []
-        self._device_msg_queue[state].insert(0,message)
+        self._device_msg_queue[state].insert(0, message)
         self._state_machine_time = time.time()
 
     def pop_device_queue(self):
         '''Returns and removes the next message in the queue'''
         ret = None
         if self.state_machine in self._device_msg_queue and \
-        self._device_msg_queue[self.state_machine]:
+                self._device_msg_queue[self.state_machine]:
             ret = self._device_msg_queue[self.state_machine].pop(0)
             self._update_message_history(ret)
             self._state_machine_time = time.time()
@@ -246,11 +256,11 @@ class Base_Device(object):
         '''Returns the creation time of the message to be sent in the queue'''
         ret = None
         if self.state_machine in self._device_msg_queue and \
-        self._device_msg_queue[self.state_machine]:
+                self._device_msg_queue[self.state_machine]:
             ret = self._device_msg_queue[self.state_machine][0].creation_time
         return ret
 
-    def _update_message_history(self,msg):
+    def _update_message_history(self, msg):
         # Remove old messages first
         archive_time = time.time() - 120
         last_msg_to_del = 0
@@ -264,7 +274,7 @@ class Base_Device(object):
         # Add this message onto the end
         self._out_history.append(msg)
 
-    def search_last_sent_msg(self,**kwargs):
+    def search_last_sent_msg(self, **kwargs):
         '''Return the most recently sent message of this type
         plm_cmd or insteon_cmd'''
         ret = None
@@ -276,12 +286,12 @@ class Base_Device(object):
         elif 'insteon_cmd' in kwargs:
             for msg in reversed(self._out_history):
                 if msg.insteon_msg and \
-                msg.insteon_msg.device_cmd_name == kwargs['insteon_cmd']:
+                        msg.insteon_msg.device_cmd_name == kwargs['insteon_cmd']:
                     ret = msg
                     break
         return ret
 
-    def attribute(self,attr,value = None):
+    def attribute(self, attr, value=None):
         if value is not None:
             self._attributes[attr] = value
         try:
@@ -290,15 +300,15 @@ class Base_Device(object):
             ret = None
         return ret
 
-    def _load_attributes(self,attributes):
+    def _load_attributes(self, attributes):
         for name, value in attributes.items():
             if name == 'ALDB':
                 self._aldb.load_aldb_records(value)
-            elif name == 'Devices':  #should only be plm?
+            elif name == 'Devices':  # should only be plm?
                 self._load_devices(value)
             else:
-                self.attribute(name,value)
+                self.attribute(name, value)
 
-    def _load_devices(self,devices):
-        for id,attributes in devices.items():
+    def _load_devices(self, devices):
+        for id, attributes in devices.items():
             device = self.add_device(id, attributes=attributes)

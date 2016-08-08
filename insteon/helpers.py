@@ -58,16 +58,20 @@ CMD_TO_BYTE = {
 }
 
 # global helpers #
+
+
 def BYTE_TO_HEX(data):
     '''Takes a bytearray or a byte and returns a string
     representation of the hex value'''
     return binascii.hexlify(data).decode().upper()
 
+
 def BYTE_TO_ID(high, mid, low):
-    ret = ('{:02x}'.format(high, 'x').upper() + 
-           '{:02x}'.format(mid, 'x').upper() + 
+    ret = ('{:02x}'.format(high, 'x').upper() +
+           '{:02x}'.format(mid, 'x').upper() +
            '{:02x}'.format(low, 'x').upper())
     return ret
+
 
 def ID_STR_TO_BYTES(dev_id_str):
     ret = bytearray(3)
