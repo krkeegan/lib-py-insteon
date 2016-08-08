@@ -324,6 +324,7 @@ PLM_SCHEMA = {
         'send_len': (2,),
         'recv_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_obj': lambda self: self.plm,
+        'nack_act': lambda obj, msg: obj.end_of_aldb(msg),
         'name': 'all_link_first_rec',
         'recv_byte_pos': {
             'plm_resp': 2,

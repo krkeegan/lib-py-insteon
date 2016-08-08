@@ -27,6 +27,7 @@ class ALDB(object):
         return ret
 
     def have_aldb_cache(self):
+        # TODO distinguish between empty aldb and no aldb
         ret = True
         if len(self._aldb) == 0:
             ret = False
