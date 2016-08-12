@@ -1,15 +1,16 @@
 import serial
 import time
 import datetime
+import pprint
 
 from .insteon_device import Insteon_Device
-from .base_objects import Base_Device, PLM_ALDB
+from .base_objects import Base_Device, PLM_ALDB, Insteon_Group
 from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
 
 
-class PLM_Group(object):
+class PLM_Group(Insteon_Group):
 
     def __init__(self, plm, group_number):
         self._plm = plm
@@ -39,7 +40,7 @@ class PLM_Group(object):
                               plm_cmd='all_link_send',
                               plm_bytes=plm_bytes)
         self.plm._queue_device_msg(message, 'all_link_send')
-        records = self.plm._aldb.search_for_records({
+        records = self.plm._aldb.get_matching_records({
             'controller': True,
             'group': self.group_number,
             'in_use': True
@@ -49,7 +50,7 @@ class PLM_Group(object):
         message.seq_lock = True
         message.seq_time = (len(records) + 1) * (87 / 1000 * 6)
         for position in records:
-            linked_device = self.plm._aldb.linked_device(position)
+            linked_obj = self.plm._aldb.get_linked_obj(position)
             # Queue a cleanup message on each device, this msg will
             # be cleared from the queue on receipt of a cleanup
             # ack
@@ -58,11 +59,12 @@ class PLM_Group(object):
             cmd_str = 'on_cleanup'
             if command == 0x13:
                 cmd_str = 'off_cleanup'
-            linked_device.send_command(
+
+            linked_obj.send_command(
                 cmd_str, '', {'cmd_2': self.group_number})
 
 
-class PLM(Base_Device):
+class PLM(Base_Device, Insteon_Group):
 
     def __init__(self, core, **kwargs):
         self._devices = {}
@@ -153,7 +155,7 @@ class PLM(Base_Device):
                 del self._read_buffer[0:index]
                 print('resulting buffer is', BYTE_TO_HEX(self._read_buffer))
             if self._read_buffer.startswith(wait_prefix):
-                print ('need to slow down!!', BYTE_TO_HEX(self._read_buffer))
+                print('need to slow down!!', BYTE_TO_HEX(self._read_buffer))
                 self.wait_to_send = .5
                 del self._read_buffer[0:1]
                 self._advance_to_msg_start()
@@ -202,13 +204,25 @@ class PLM(Base_Device):
         msg = PLM_Message(self,
                           raw_data=raw_msg,
                           is_incomming=True)
-        if 'recv_act' in msg.plm_schema:
-            obj = msg.plm_schema['recv_obj'](msg)
-            if obj is not None:
-                msg.plm_schema['recv_act'](obj, msg)
-        else:
-            print('received msg, but no action specified')
-            pprint.pprint(msg.__dict__)
+        pprint.pprint(msg.__dict__)
+        if msg.plm_resp_ack:
+            if 'ack_act' in msg.plm_schema:
+                msg.plm_schema['ack_act'](self, msg)
+            else:
+                # Attempting default action
+                self.rcvd_plm_ack(msg)
+        elif msg.plm_resp_nack:
+            self.wait_to_send = .5
+            if 'nack_act' in msg.plm_schema:
+                msg.plm_schema['nack_act'](self, msg)
+            else:
+                print('PLM sent NACK to last command, retrying last message')
+        elif msg.plm_resp_bad_cmd:
+            self.wait_to_send = .5
+            if 'bad_cmd_act' in msg.plm_schema:
+                msg.plm_schema['bad_cmd_act'](self, msg)
+            else:
+                print('PLM said bad command, retrying last message')
 
     def get_device_by_addr(self, addr):
         ret = None
@@ -366,20 +380,47 @@ class PLM(Base_Device):
     def rcvd_plm_ack(self, msg):
         if (self._last_msg.plm_ack == False
                 and msg.raw_msg[0:-1] == self._last_msg.raw_msg):
-            if msg.plm_resp_ack:
-                self._last_msg.plm_ack = True
-                self._last_msg.time_plm_ack = time.time()
-            elif msg.plm_resp_nack:
-                if 'nack_act' in msg.plm_schema:
-                    msg.plm_schema['nack_act'](self, msg)
-                else:
-                    print('PLM sent NACK to last command')
-                    self.wait_to_send = .5
-            elif msg.plm_resp_bad_cmd:
-                print('PLM said bad command')
-                self.wait_to_send = .5
+            self._last_msg.plm_ack = True
+            self._last_msg.time_plm_ack = time.time()
         else:
             print('received spurious plm ack')
+
+    def rcvd_all_link_manage_ack(self, msg):
+        aldb = msg.raw_msg[3:11]
+        ctrl_code = msg.get_byte_by_name('ctrl_code')
+        link_flags = msg.get_byte_by_name('link_flags')
+        search_attributes = {
+            'controller': True if link_flags & 0b01000000 else False,
+            'responder': True if ~link_flags & 0b01000000 else False,
+            'group': msg.get_byte_by_name('group'),
+            'dev_addr_hi': msg.get_byte_by_name('dev_addr_hi'),
+            'dev_addr_mid': msg.get_byte_by_name('dev_addr_mid'),
+            'dev_addr_low': msg.get_byte_by_name('dev_addr_low'),
+        }
+        if ctrl_code == 0x40 or ctrl_code == 0x41:
+            self._aldb.add_record(aldb)
+        elif ctrl_code == 0x20:
+            records = self._aldb.get_matching_records(search_attributes)
+            try:
+                plm._aldb.edit_record(records[0], aldb)
+            except:
+                print('error trying to edit plm aldb cache')
+        elif ctrl_code == 0x80:
+            records = self._aldb.get_matching_records(search_attributes)
+            try:
+                plm._aldb.delete_record(records[0], aldb)
+            except:
+                print('error trying to delete plm aldb cache')
+        self.rcvd_plm_ack(msg)
+
+    def rcvd_all_link_manage_nack(self, msg):
+        self._last_msg.failed  # abandon all retries
+        self._aldb.query_aldb()
+        # TODO need someway to resend the intial ALDB command
+
+    def rcvd_insteon_msg(self, msg):
+        insteon_obj = self.get_device_by_addr(self.insteon_msg.from_addr_str)
+        insteon_obj.msg_rcvd(msg)
 
     def rcvd_plm_x10_ack(self, msg):
         # For some reason we have to slow down when sending X10 msgs to the PLM
@@ -396,7 +437,7 @@ class PLM(Base_Device):
         print('reached the end of the PLMs ALDB')
         records = self._aldb.get_all_records()
         for key in sorted(records):
-            print (key, ":", BYTE_TO_HEX(records[key]))
+            print(key, ":", BYTE_TO_HEX(records[key]))
 
     def rcvd_all_link_complete(self, msg):
         if msg.get_byte_by_name('link_code') == 0xFF:

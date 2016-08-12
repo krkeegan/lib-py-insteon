@@ -8,15 +8,21 @@ must be defined
         'rcvd_len' : tuple - first value is standard message length,
                              second value is extended message length
         'name' : string - string suitable for use as a variable
-        'recv_act' : function (obj, msg)
-                        obj = the object on which the action should be run
+        'ack_act' : function (obj, msg)
+                        obj = is the plm object that received the message
                         msg = the message object
                         This function is the received action that should be
                         performed on the arrival of a message
-        'recv_obj' : function (self)
-                        self = the message object
-                        Returns the object on which the recv_act should be
-                        performed on
+        'nack_act' : function (obj, msg)
+                        obj = is the plm object that received the message
+                        msg = the message object
+                        This function is the nack action that should be
+                        performed on the arrival of a nack response
+        'bad_cmd_act' : function (obj, msg)
+                        obj = is the plm object that received the message
+                        msg = the message object
+                        This function is the action that should be performed on
+                        the arrival of a bad_cmd response
         'recv_byte_pos' : {
             '<name>' : <int> - the name is a standardized description of the
                            byte.
@@ -31,8 +37,7 @@ PLM_SCHEMA = {
         'rcvd_len': (11,),
         'send_len': (0,),
         'name': 'insteon_received',
-        'recv_act': lambda obj, msg: obj.msg_rcvd(msg),
-        'recv_obj': lambda self: self.plm.get_device_by_addr(self.insteon_msg.from_addr_str),
+        'ack_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
             'from_addr_hi': 2,
             'from_addr_mid': 3,
@@ -49,8 +54,7 @@ PLM_SCHEMA = {
         'rcvd_len': (25,),
         'send_len': (0,),
         'name': 'insteon_ext_received',
-        'recv_act': lambda obj, msg: obj.msg_rcvd(msg),
-        'recv_obj': lambda self: self.plm.get_device_by_addr(self.insteon_msg.from_addr_str),
+        'ack_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
             'from_addr_hi': 2,
             'from_addr_mid': 3,
@@ -80,8 +84,7 @@ PLM_SCHEMA = {
     0x52: {
         'rcvd_len': (4,),
         'send_len': (0,),
-        'recv_act': lambda obj, msg: obj.rcvd_x10(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_x10(msg),
         'name': 'x10_received',
         'recv_byte_pos': {
             'raw_x10': 2,
@@ -92,8 +95,7 @@ PLM_SCHEMA = {
         'rcvd_len': (10,),
         'send_len': (0,),
         'name': 'all_link_complete',
-        'recv_act': lambda obj, msg: obj.rcvd_all_link_complete(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_all_link_complete(msg),
         'recv_byte_pos': {
             'link_code': 2,
             'group': 3,
@@ -108,8 +110,7 @@ PLM_SCHEMA = {
     0x54: {
         'rcvd_len': (3,),
         'send_len': (0,),
-        'recv_act': lambda obj, msg: obj.rcvd_btn_event(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_btn_event(msg),
         'name': 'plm_button_event',
         'recv_byte_pos': {
             'btn_event': 2,
@@ -118,8 +119,7 @@ PLM_SCHEMA = {
     0x55: {
         'rcvd_len': (2,),
         'send_len': (0,),
-        'recv_act': lambda obj, msg: obj.rcvd_plm_reset(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_reset(msg),
         'name': 'user_plm_reset',
         'recv_byte_pos': {
             # No other recv_byte_pos
@@ -129,8 +129,7 @@ PLM_SCHEMA = {
         'rcvd_len': (7,),
         'send_len': (0,),
         'name': 'all_link_clean_failed',
-        'recv_act': lambda obj, msg: obj.rcvd_all_link_clean_failed(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_all_link_clean_failed(msg),
         'recv_byte_pos': {
             'link_fail': 2,
             'group': 3,
@@ -142,8 +141,7 @@ PLM_SCHEMA = {
     0x57: {
         'rcvd_len': (10,),
         'send_len': (0,),
-        'recv_act': lambda obj, msg: obj.rcvd_aldb_record(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_aldb_record(msg),
         'name': 'all_link_record',
         'recv_byte_pos': {
             'link_flags': 2,
@@ -159,8 +157,7 @@ PLM_SCHEMA = {
     0x58: {
         'rcvd_len': (3,),
         'send_len': (0,),
-        'recv_act': lambda obj, msg: obj.rcvd_all_link_clean_status(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_all_link_clean_status(msg),
         'name': 'all_link_clean_status',
         'recv_byte_pos': {
             'plm_resp': 2,
@@ -170,8 +167,7 @@ PLM_SCHEMA = {
         'rcvd_len': (9,),
         'send_len': (2,),
         'name': 'plm_info',
-        'recv_act': lambda obj, msg: obj.plm_info(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.plm_info(msg),
         'recv_byte_pos': {
             'plm_addr_hi': 2,
             'plm_addr_mid': 3,
@@ -188,8 +184,7 @@ PLM_SCHEMA = {
         'rcvd_len': (6,),
         'send_len': (5,),
         'name': 'all_link_send',
-        'recv_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_byte_pos': {
             'group': 2,
             'cmd_1': 3,
@@ -206,8 +201,7 @@ PLM_SCHEMA = {
         'rcvd_len': (9, 23),
         'send_len': (8, 22),
         'name': 'insteon_send',
-        'recv_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_byte_pos': {
             'to_addr_hi': 2,
             'to_addr_mid': 3,
@@ -258,8 +252,7 @@ PLM_SCHEMA = {
     0x63: {
         'rcvd_len': (5,),
         'send_len': (4,),
-        'recv_act': lambda obj, msg: obj.rcvd_plm_x10_ack(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_x10_ack(msg),
         'name': 'x10_send',
         'recv_byte_pos': {
             'raw_x10': 2,
@@ -274,8 +267,7 @@ PLM_SCHEMA = {
     0x64: {
         'rcvd_len': (5,),
         'send_len': (4,),
-        'recv_act': lambda obj, msg: obj.rcvd_all_link_start(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_all_link_start(msg),
         'name': 'all_link_start',
         'recv_byte_pos': {
             'link_code': 2,
@@ -322,8 +314,7 @@ PLM_SCHEMA = {
     0x69: {
         'rcvd_len': (3,),
         'send_len': (2,),
-        'recv_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'nack_act': lambda obj, msg: obj.end_of_aldb(msg),
         'name': 'all_link_first_rec',
         'recv_byte_pos': {
@@ -335,8 +326,7 @@ PLM_SCHEMA = {
     0x6A: {
         'rcvd_len': (3,),
         'send_len': (2,),
-        'recv_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
-        'recv_obj': lambda self: self.plm,
+        'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'nack_act': lambda obj, msg: obj.end_of_aldb(msg),
         'name': 'all_link_next_rec',
         'recv_byte_pos': {
@@ -376,7 +366,10 @@ PLM_SCHEMA = {
     },
     0x6F: {
         'rcvd_len': (12,),
+        'send_len': (11,),
         'name': 'all_link_manage_rec',
+        'ack_act': lambda obj, msg: obj.rcvd_all_link_manage_ack(msg),
+        'nack_act': lambda obj, msg: obj.rcvd_all_link_manage_nack(msg),
         'recv_byte_pos': {
             'ctrl_code': 2,
             'link_flags': 3,
@@ -388,6 +381,24 @@ PLM_SCHEMA = {
             'data_2': 9,
             'data_3': 10,
             'plm_resp': 11
+        },
+        'send_byte_pos': {
+            'ctrl_code': 2,
+            # 0x00 Find first
+            # 0x01 Find next
+            # 0x20 Modify (matches on cont/resp, group,dev_id; not d1-3) NAK if not match
+            # 0x40 Add controller, (matching cont/resp, group,dev_id must not exist)
+            # 0x41 Add responder, (matching cont/resp, group,dev_id must not exist)
+            # 0x80 Delete (matches on cont/resp, group,dev_id; not d1-3)
+            # NAK if no match
+            'link_flags': 3,
+            'group': 4,
+            'dev_addr_hi': 5,
+            'dev_addr_mid': 6,
+            'dev_addr_low': 7,
+            'data_1': 8,
+            'data_2': 9,
+            'data_3': 10
         }
     },
     0x70: {

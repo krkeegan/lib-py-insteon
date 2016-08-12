@@ -14,6 +14,9 @@ class ALDB(object):
     def edit_record(self, position, record):
         self._aldb[position] = record
 
+    def delete_record(self, position):
+        del(self._aldb[position])
+
     def get_record(self, position):
         return self._aldb[position]
 
@@ -27,7 +30,8 @@ class ALDB(object):
         return ret
 
     def have_aldb_cache(self):
-        # TODO distinguish between empty aldb and no aldb
+        # TODO distinguish between empty aldb and no aldb this is only used
+        # for the PLM so far, perhaps move there?
         ret = True
         if len(self._aldb) == 0:
             ret = False
@@ -43,13 +47,9 @@ class ALDB(object):
     def edit_record_byte(self, aldb_pos, byte_pos, byte):
         self._aldb[aldb_pos][byte_pos] = byte
 
-    def add_plm_record(self, record):
-        position = str(len(self._aldb) + 1)
-        position = position.zfill(4)
-        self._aldb[position] = record
-
-    def search_for_records(self, attributes):
-        '''Performs an AND search for records on this device'''
+    def get_matching_records(self, attributes):
+        '''Returns an array of positions of each records that matches ALL
+        attributes'''
         ret = []
         for position, record in self._aldb.items():
             parsed_record = self.parse_record(position)
@@ -69,9 +69,9 @@ class ALDB(object):
             'responder': ~bytes[0] & 0b01000000,
             'highwater': ~bytes[0] & 0b00000010,
             'group': bytes[1],
-            'dev_hi': bytes[2],
-            'dev_mid': bytes[3],
-            'dev_low': bytes[4],
+            'dev_addr_hi': bytes[2],
+            'dev_addr_mid': bytes[3],
+            'dev_addr_low': bytes[4],
             'data_1': bytes[5],
             'data_2': bytes[6],
             'data_3': bytes[7],
@@ -83,11 +83,11 @@ class ALDB(object):
                 parsed[attr] = False
         return parsed
 
-    def linked_device(self, position):
+    def get_linked_obj(self, position):
         parsed_record = self.parse_record(position)
-        high = parsed_record['dev_hi']
-        mid = parsed_record['dev_mid']
-        low = parsed_record['dev_low']
+        high = parsed_record['dev_addr_hi']
+        mid = parsed_record['dev_addr_mid']
+        low = parsed_record['dev_addr_low']
         return self._parent.plm.get_device_by_addr(BYTE_TO_ID(high, mid, low))
 
     def is_last_aldb(self, key):
@@ -142,11 +142,24 @@ class Device_ALDB(ALDB):
             self._lsb = 0x00
             self._parent.send_command('read_aldb', 'query_aldb')
 
+    def create_responder(self, controller, d1, d2, d3):
+                # Device Responder
+                # D1 On Level D2 Ramp Rate D3 Group of responding device i1 00
+                # i2 01
+        pass
+
+    def create_controller(responder):
+                # Device controller
+                # D1 03 Hops?? D2 00 D3 Group 01 of responding device??
+        pass
+
 
 class PLM_ALDB(ALDB):
 
     def add_record(self, aldb):
-        self.add_plm_record(aldb)
+        position = str(len(self._aldb) + 1)
+        position = position.zfill(4)
+        self._aldb[position] = aldb
 
     def query_aldb(self):
         '''Queries the PLM for a list of the link records saved on
@@ -154,9 +167,42 @@ class PLM_ALDB(ALDB):
         self.clear_all_records()
         self._parent.send_command('all_link_first_rec', 'query_aldb')
 
+    def create_responder(self, controller, *args):
+        self._write_link(controller, is_plm_controller=False)
+
+    def create_controller(self, controller, *args):
+        self._write_link(controller, is_plm_controller=True)
+
+    def _write_link(self, linked_obj, is_plm_controller):
+        group = linked_obj.group_number
+        if is_plm_controller:
+            group = self._parent.group_number
+        link_bytes = {
+            'controller': True if is_plm_controller else False,
+            'responder': False if is_plm_controller else True,
+            'group': group,
+            'dev_addr_hi': linked_obj.dev_id_hi,
+            'dev_addr_mid': linked_obj.dev_id_mid,
+            'dev_addr_low': linked_obj.dev_id_low,
+        }
+        del link_bytes['controller']
+        del link_bytes['responder']
+        records = self.get_matching_records(link_bytes)
+        link_flags = 0xE2 if is_plm_controller else 0xA2
+        ctrl_code = 0x20
+        if (len(records) == 0):
+            ctrl_code = 0x40 if is_plm_controller else 0x41
+        link_bytes.update({
+            'ctrl_code': ctrl_code,
+            'link_flags': link_flags,
+            'data_1': linked_obj.dev_cat,
+            'data_2': linked_obj.sub_cat,
+            'data_3': linked_obj.firmware
+        })
+        self._parent.send_command('all_link_manage_rec', '', link_bytes)
+
 
 class Base_Device(object):
-    # TODO Store Device State
 
     def __init__(self, core, plm, **kwargs):
         self._core = core
@@ -195,7 +241,7 @@ class Base_Device(object):
             # Always check for states other than default
             if self._state_machine != 'default':
                 now = datetime.datetime.now().strftime("%M:%S.%f")
-                print (now, self._state_machine, "state expired")
+                print(now, self._state_machine, "state expired")
                 pprint.pprint(self._device_msg_queue)
             self._state_machine = self._get_next_state_machine()
             if self._state_machine != 'default':
@@ -313,3 +359,44 @@ class Base_Device(object):
     def _load_devices(self, devices):
         for id, attributes in devices.items():
             device = self.add_device(id, attributes=attributes)
+
+
+class Insteon_Group(object):
+
+    @property
+    def group_number(self):
+        # sub groups override that
+        return 1
+
+    @property
+    def dev_id_hi(self):
+        return self._parent._dev_id_hi
+
+    @property
+    def dev_id_mid(self):
+        return self._parent._dev_id_mid
+
+    @property
+    def dev_id_low(self):
+        return self._parent._dev_id_low
+
+    @property
+    def dev_cat(self):
+        return self._parent.dev_cat
+
+    @property
+    def sub_cat(self):
+        return self._parent.sub_cat
+
+    @property
+    def firmware(self):
+        return self._parent.firmware
+
+    def create_link(self, responder, d1, d2, d3):
+        pass
+        self._aldb.create_controller(responder)
+        responder._aldb.create_responder(self, d1, d2, d3)
+
+class Trigger(object):
+    pass
+    #TODO Add PLM trigger of an event based on arrival of message

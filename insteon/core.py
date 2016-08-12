@@ -12,8 +12,6 @@ from .msg_schema import *
 from .helpers import *
 from .rest_server import *
 
-# TODO Load State
-
 
 class Insteon_Core(object):
     '''Provides global management functions'''

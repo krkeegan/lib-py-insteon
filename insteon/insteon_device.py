@@ -2,13 +2,13 @@ import math
 import time
 import pprint
 
-from .base_objects import Base_Device, Device_ALDB
+from .base_objects import Base_Device, Device_ALDB, Insteon_Group
 from .msg_schema import *
 from .message import PLM_Message, Insteon_Message
 from .helpers import *
 
 
-class Insteon_Device(Base_Device):
+class Insteon_Device(Base_Device, Insteon_Group):
 
     def __init__(self, core, plm, **kwargs):
         self._aldb = Device_ALDB(self)
@@ -57,6 +57,18 @@ class Insteon_Device(Base_Device):
         return self._dev_id_low
 
     @property
+    def dev_cat(self):
+        return self.attribute('dev_cat')
+
+    @property
+    def sub_cat(self):
+        return self.attribute('sub_cat')
+
+    @property
+    def firmware(self):
+        return self.attribute('firmware')
+
+    @property
     def smart_hops(self):
         if self.attribute('hop_array') is not None:
             avg = (
@@ -76,7 +88,7 @@ class Insteon_Device(Base_Device):
     def msg_rcvd(self, msg):
         self._set_plm_wait(msg)
         if self._is_duplicate(msg):
-            print ('Skipped duplicate msg')
+            print('Skipped duplicate msg')
             return
         if msg.insteon_msg.message_type == 'direct':
             self._process_direct_msg(msg)
@@ -232,10 +244,10 @@ class Insteon_Device(Base_Device):
     def _is_valid_direct_ack(self, msg):
         ret = True
         if self.last_msg.plm_ack != True:
-            print ('ignoring a device response received before PLM ack')
+            print('ignoring a device response received before PLM ack')
             ret = False
         elif self.last_msg.insteon_msg.device_ack != False:
-            print ('ignoring an unexpected device response')
+            print('ignoring an unexpected device response')
             ret = False
         return ret
 
@@ -311,7 +323,7 @@ class Insteon_Device(Base_Device):
         if (self.state_machine == 'query_aldb' and
                 (self.last_msg.get_byte_by_name('cmd_2') ==
                  msg.get_byte_by_name('cmd_2'))
-                ):
+            ):
             self.peek_aldb()
 
     def ack_peek_aldb(self, msg):
@@ -329,7 +341,7 @@ class Insteon_Device(Base_Device):
                 # this is the last entry on this device
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
-                    print (key, ":", BYTE_TO_HEX(records[key]))
+                    print(key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
                 self.send_command('light_status_request', 'set_aldb_delta')
             elif self._aldb.is_empty_aldb(self._aldb._get_aldb_key()):
@@ -376,7 +388,7 @@ class Insteon_Device(Base_Device):
                 # this is the last entry on this device
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
-                    print (key, ":", BYTE_TO_HEX(records[key]))
+                    print(key, ":", BYTE_TO_HEX(records[key]))
                 self.send_command('light_status_request', 'set_aldb_delta')
             else:
                 if self._aldb.lsb == 0x07:
@@ -461,6 +473,8 @@ class Insteon_Device(Base_Device):
         self.send_command('peek_one_byte', 'query_aldb')
 
     def write_aldb_record(self, msb, lsb):
+        # TODO This is only the base structure still need to add more basically just
+        # deletes things right now
         dev_bytes = {'usr_3': msb, 'usr_4': lsb}
         self.send_command('write_aldb', '', dev_bytes=dev_bytes)
 
