@@ -311,8 +311,8 @@ class Base_Device(object):
         # Remove old messages first
         archive_time = time.time() - 120
         last_msg_to_del = 0
-        for msg in self._out_history:
-            if msg.time_sent < archive_time:
+        for search_msg in self._out_history:
+            if search_msg.time_sent < archive_time:
                 last_msg_to_del += 1
             else:
                 break
