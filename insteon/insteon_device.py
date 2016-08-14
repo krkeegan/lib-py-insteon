@@ -2,13 +2,13 @@ import math
 import time
 import pprint
 
-from .base_objects import Base_Device, Device_ALDB, Insteon_Group
+from .base_objects import Base_Device, Device_ALDB, Insteon_Group, Root_Insteon
 from .msg_schema import *
 from .message import PLM_Message, Insteon_Message
 from .helpers import *
 
 
-class Insteon_Device(Base_Device, Insteon_Group):
+class Insteon_Device(Root_Insteon):
 
     def __init__(self, core, plm, **kwargs):
         self._aldb = Device_ALDB(self)

@@ -138,6 +138,15 @@ class PLM_Message(object):
         return self.plm_schema[msg_direction]
 
     @property
+    def parsed_attributes(self):
+        '''Returns a dictionary of the attribute names associated with their
+        byte values'''
+        ret = {}
+        for name in self.attribute_positions.keys():
+            ret[name] = self.get_byte_by_name(name)
+        return ret
+
+    @property
     def plm_resp_flag(self):
         if 'plm_resp' in self.attribute_positions or \
                 'plm_resp_e' in self.attribute_positions:

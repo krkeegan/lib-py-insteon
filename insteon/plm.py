@@ -4,7 +4,7 @@ import datetime
 import pprint
 
 from .insteon_device import Insteon_Device
-from .base_objects import Base_Device, PLM_ALDB, Insteon_Group
+from .base_objects import Base_Device, PLM_ALDB, Insteon_Group, Trigger_Manager, Trigger, Root_Insteon
 from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
@@ -64,11 +64,12 @@ class PLM_Group(Insteon_Group):
                 cmd_str, '', {'cmd_2': self.group_number})
 
 
-class PLM(Base_Device, Insteon_Group):
+class PLM(Root_Insteon):
 
     def __init__(self, core, **kwargs):
         self._devices = {}
         self._aldb = PLM_ALDB(self)
+        self._trigger_mngr = Trigger_Manager(self)
         super().__init__(core, self, **kwargs)
         self._read_buffer = bytearray()
         self._last_msg = ''
@@ -102,11 +103,10 @@ class PLM(Base_Device, Insteon_Group):
             self.port_active = False
         if self.device_id == '':
             self.send_command('plm_info')
-        if self._aldb.have_aldb_cache() == False:
+        if self._aldb.have_aldb_cache() is False:
             self._aldb.query_aldb()
-        self._groups = []
-        for group in range(0x02, 0xFF):
-            self._groups.append(PLM_Group(self, group))
+        for group_num in range(0x02, 0xFF):
+            self.create_group(group_num, PLM_Group)
 
     def add_device(self, device_id, **kwargs):
         device_id = device_id.upper()
@@ -198,13 +198,14 @@ class PLM(Base_Device, Insteon_Group):
             self._wait_to_send = time.time()
         self._wait_to_send += value
 
-    def process_inc_msg(self, raw_msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
-        msg = PLM_Message(self,
-                          raw_data=raw_msg,
-                          is_incomming=True)
-        pprint.pprint(msg.__dict__)
+        msg = PLM_Message(self, raw_data=raw_msg, is_incomming=True)
+        self._msg_dispatcher(msg)
+        self._trigger_mngr.match_msg(msg)
+        # TODO clean up expired triggers?
+
+    def _msg_dispatcher(self, msg):
         if msg.plm_resp_ack:
             if 'ack_act' in msg.plm_schema:
                 msg.plm_schema['ack_act'](self, msg)
@@ -223,18 +224,20 @@ class PLM(Base_Device, Insteon_Group):
                 msg.plm_schema['bad_cmd_act'](self, msg)
             else:
                 print('PLM said bad command, retrying last message')
+        elif 'recv_act' in msg.plm_schema:
+            msg.plm_schema['recv_act'](self, msg)
 
     def get_device_by_addr(self, addr):
         ret = None
         try:
-            ret = self.plm._devices[addr]
+            ret = self._devices[addr]
         except KeyError as e:
             print('error, unknown device address=', addr)
         return ret
 
     def get_all_devices(self):
         ret = []
-        for addr, device in self.plm._devices.items():
+        for addr, device in self._devices.items():
             ret.append(device)
         return ret
 
@@ -303,7 +306,7 @@ class PLM(Base_Device, Insteon_Group):
             return
         now = datetime.datetime.now().strftime("%M:%S.%f")
         # allow 75 milliseconds for the PLM to ack a message
-        if msg.plm_ack == False:
+        if msg.plm_ack is False:
             if msg.time_sent < time.time() - (75 / 1000):
                 print(now, 'PLM failed to ack the last message')
                 if msg.plm_retry >= 3:
@@ -313,12 +316,12 @@ class PLM(Base_Device, Insteon_Group):
                     msg.plm_retry += 1
                     self._resend_failed_msg()
             return
-        if msg.seq_lock == True:
+        if msg.seq_lock:
             if msg.time_sent < time.time() - msg.seq_time:
                 print(now, 'PLM sequence lock expired, moving on')
                 msg.seq_lock = False
             return
-        if msg.insteon_msg and msg.insteon_msg.device_ack == False:
+        if msg.insteon_msg and msg.insteon_msg.device_ack is False:
             total_hops = msg.insteon_msg.max_hops * 2
             hop_delay = 75 if msg.insteon_msg.msg_length == 'standard' else 200
             # Increase delay on each subsequent retry
@@ -378,8 +381,8 @@ class PLM(Base_Device, Insteon_Group):
         return ret
 
     def rcvd_plm_ack(self, msg):
-        if (self._last_msg.plm_ack == False
-                and msg.raw_msg[0:-1] == self._last_msg.raw_msg):
+        if (self._last_msg.plm_ack is False and
+                msg.raw_msg[0:-1] == self._last_msg.raw_msg):
             self._last_msg.plm_ack = True
             self._last_msg.time_plm_ack = time.time()
         else:
@@ -402,24 +405,40 @@ class PLM(Base_Device, Insteon_Group):
         elif ctrl_code == 0x20:
             records = self._aldb.get_matching_records(search_attributes)
             try:
-                plm._aldb.edit_record(records[0], aldb)
+                self._aldb.edit_record(records[0], aldb)
             except:
                 print('error trying to edit plm aldb cache')
         elif ctrl_code == 0x80:
             records = self._aldb.get_matching_records(search_attributes)
             try:
-                plm._aldb.delete_record(records[0], aldb)
+                self._aldb.delete_record(records[0], aldb)
             except:
                 print('error trying to delete plm aldb cache')
         self.rcvd_plm_ack(msg)
 
     def rcvd_all_link_manage_nack(self, msg):
-        self._last_msg.failed  # abandon all retries
+        print('error writing aldb to PLM, will rescan plm and try again')
+        plm = self
+        self._last_msg.failed = True
         self._aldb.query_aldb()
-        # TODO need someway to resend the intial ALDB command
+        trigger_attributes = {'plm_resp': 0x15}
+        trigger = Trigger('all_link_next_rec', trigger_attributes)
+        dev_addr_hi = msg.get_byte_by_name('dev_addr_hi')
+        dev_addr_mid = msg.get_byte_by_name('dev_addr_mid')
+        dev_addr_low = msg.get_byte_by_name('dev_addr_low')
+        device_id = BYTE_TO_ID(dev_addr_hi, dev_addr_mid, dev_addr_low)
+        device = self.get_device_by_addr(device_id)
+        is_controller = False
+        if msg.get_byte_by_name('link_flags') == 0xE2:
+            plm = self.get_object_by_group_num(msg.get_byte_by_name('group'))
+            is_controller = True
+        else:
+            device = device.get_object_by_group_num(msg.get_byte_by_name('group'))
+        trigger.nack_function = lambda: plm._aldb._write_link(device, is_controller)
+        self._trigger_mngr.add_trigger(trigger)
 
     def rcvd_insteon_msg(self, msg):
-        insteon_obj = self.get_device_by_addr(self.insteon_msg.from_addr_str)
+        insteon_obj = self.get_device_by_addr(msg.insteon_msg.from_addr_str)
         insteon_obj.msg_rcvd(msg)
 
     def rcvd_plm_x10_ack(self, msg):
@@ -515,14 +534,6 @@ class PLM(Base_Device, Insteon_Group):
         failed_addr.extend(msg.get_byte_by_name('fail_addr_low'))
         print('A specific device faileled to ack the cleanup msg from addr',
               BYTE_TO_HEX(failed_addr))
-
-    def get_group_by_number(self, number):
-        ret = None
-        for group in self._groups:
-            if group.group_number == number:
-                ret = group
-                break
-        return ret
 
     def rcvd_all_link_start(self, msg):
         if msg.plm_resp_ack:

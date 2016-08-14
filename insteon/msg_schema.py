@@ -23,6 +23,11 @@ must be defined
                         msg = the message object
                         This function is the action that should be performed on
                         the arrival of a bad_cmd response
+        'recv_act' : function (obj, msg)
+                        obj = is the plm object that received the message
+                        msg = the message object
+                        This function is the action that should be performed on
+                        the arrival of a msg without an ACK,NACK, or Bad_Cmd
         'recv_byte_pos' : {
             '<name>' : <int> - the name is a standardized description of the
                            byte.
@@ -37,7 +42,7 @@ PLM_SCHEMA = {
         'rcvd_len': (11,),
         'send_len': (0,),
         'name': 'insteon_received',
-        'ack_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
             'from_addr_hi': 2,
             'from_addr_mid': 3,
@@ -54,7 +59,7 @@ PLM_SCHEMA = {
         'rcvd_len': (25,),
         'send_len': (0,),
         'name': 'insteon_ext_received',
-        'ack_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
             'from_addr_hi': 2,
             'from_addr_mid': 3,
@@ -84,7 +89,7 @@ PLM_SCHEMA = {
     0x52: {
         'rcvd_len': (4,),
         'send_len': (0,),
-        'ack_act': lambda obj, msg: obj.rcvd_x10(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_x10(msg),
         'name': 'x10_received',
         'recv_byte_pos': {
             'raw_x10': 2,
@@ -95,7 +100,7 @@ PLM_SCHEMA = {
         'rcvd_len': (10,),
         'send_len': (0,),
         'name': 'all_link_complete',
-        'ack_act': lambda obj, msg: obj.rcvd_all_link_complete(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_all_link_complete(msg),
         'recv_byte_pos': {
             'link_code': 2,
             'group': 3,
@@ -110,7 +115,7 @@ PLM_SCHEMA = {
     0x54: {
         'rcvd_len': (3,),
         'send_len': (0,),
-        'ack_act': lambda obj, msg: obj.rcvd_btn_event(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_btn_event(msg),
         'name': 'plm_button_event',
         'recv_byte_pos': {
             'btn_event': 2,
@@ -119,7 +124,7 @@ PLM_SCHEMA = {
     0x55: {
         'rcvd_len': (2,),
         'send_len': (0,),
-        'ack_act': lambda obj, msg: obj.rcvd_plm_reset(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_plm_reset(msg),
         'name': 'user_plm_reset',
         'recv_byte_pos': {
             # No other recv_byte_pos
@@ -129,7 +134,7 @@ PLM_SCHEMA = {
         'rcvd_len': (7,),
         'send_len': (0,),
         'name': 'all_link_clean_failed',
-        'ack_act': lambda obj, msg: obj.rcvd_all_link_clean_failed(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_all_link_clean_failed(msg),
         'recv_byte_pos': {
             'link_fail': 2,
             'group': 3,
@@ -141,7 +146,7 @@ PLM_SCHEMA = {
     0x57: {
         'rcvd_len': (10,),
         'send_len': (0,),
-        'ack_act': lambda obj, msg: obj.rcvd_aldb_record(msg),
+        'recv_act': lambda obj, msg: obj.rcvd_aldb_record(msg),
         'name': 'all_link_record',
         'recv_byte_pos': {
             'link_flags': 2,

@@ -397,6 +397,120 @@ class Insteon_Group(object):
         self._aldb.create_controller(responder)
         responder._aldb.create_responder(self, d1, d2, d3)
 
+
+class Root_Insteon(Base_Device, Insteon_Group):
+
+    def __init__(self, core, plm, **kwargs):
+        self._groups = []
+        super().__init__(core, plm, **kwargs)
+
+    def create_group(self, group_num, Group_Class):
+        self._groups.append(Group_Class(self, group_num))
+
+    def get_object_by_group_num(self, search_num):
+        ret = None
+        if search_num == 0x00 or search_num == 0x01:
+            ret = self
+        else:
+            for group_obj in self._groups:
+                if group_obj.group_number == search_num:
+                    ret = group_obj
+                    break
+        return ret
+
+
+class Trigger_Manager(object):
+
+    def __init__(self, parent):
+        self._parent = parent
+        self._triggers = {}
+
+    def add_trigger(self, trigger_obj):
+        self._triggers[time.time()] = trigger_obj
+
+    # TODO remove expired triggers?
+
+    def match_msg(self, msg):
+        parsed_msg = msg.parsed_attributes
+        delete_keys = []
+        for trigger_key, trigger in self._triggers.items():
+            if trigger.msg_name == msg.plm_cmd_type:
+                trigger_match = True
+                for test_key, test_val in trigger.attributes.items():
+                    if test_key in parsed_msg:
+                        if (
+                                trigger.attributes[test_key] ==
+                                parsed_msg[test_key]
+                        ):
+                            pass  # match
+                        else:
+                            trigger_match = False
+                            break
+                # end loop of test attributes
+                if (trigger_match):
+                    self.run_trigger(msg, trigger_key)
+                    delete_keys.append(trigger_key)
+        # end loop of triggers
+        for trigger_key in delete_keys:
+            del self._triggers[trigger_key]
+
+    def run_trigger(self, msg, trigger_key):
+        trigger = self._triggers[trigger_key]
+        if msg.plm_resp_ack and trigger.ack_function != '':
+            trigger.ack_function()
+        elif msg.plm_resp_nack and trigger.nack_function != '':
+            trigger.nack_function()
+        elif msg.plm_resp_bad_cmd and trigger.bad_cmd_function != '':
+            trigger.bad_cmd_function()
+
+    def delete_matching_attr(self, msg_name, attributes={}):
+        pass
+
+
 class Trigger(object):
-    pass
-    #TODO Add PLM trigger of an event based on arrival of message
+
+    def __init__(self, msg_name, attributes={}):
+        '''Trigger functions will be called when a message matching all of the
+        identified attributes is received.  The function matching the type of
+        ack/nack/bad_cmd type is called.  In any case, even if no function
+        is defined, the trigger is then deleted.'''
+        self._msg_name = msg_name
+        self._msg_attributes = attributes
+        self._ack_function = ''
+        self._nack_function = ''
+        self._bad_cmd_function = ''
+
+    @property
+    def ack_function(self):
+        """Contains a function to be called on an ACK trigger"""
+        return self._ack_function
+
+    @ack_function.setter
+    def ack_function(self, function):
+        self._ack_function = function
+
+    @property
+    def nack_function(self):
+        """Contains a function to be called on an NACK trigger"""
+        return self._nack_function
+
+    @nack_function.setter
+    def nack_function(self, function):
+        self._nack_function = function
+
+    @property
+    def bad_cmd_function(self):
+        """Contains a function to be called on an bad_cmd trigger"""
+        return self._bad_cmd_function
+
+    @bad_cmd_function.setter
+    def bad_cmd_function(self, function):
+        self._bad_cmd_function = function
+
+    @property
+    def attributes(self):
+        return self._msg_attributes
+
+    @property
+    def msg_name(self):
+        return self._msg_name
