@@ -198,6 +198,7 @@ class PLM(Root_Insteon):
             self._wait_to_send = time.time()
         self._wait_to_send += value
 
+    def process_inc_msg(self, raw_msg):
         now = datetime.datetime.now().strftime("%M:%S.%f")
         print(now, 'found legitimate msg', BYTE_TO_HEX(raw_msg))
         msg = PLM_Message(self, raw_data=raw_msg, is_incomming=True)
