@@ -107,40 +107,83 @@ class Device_ALDB(ALDB):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self._msb = 0x00
-        self._lsb = 0x00
 
-    @property
-    def msb(self):
-        return self._msb
-
-    @msb.setter
-    def msb(self, value):
-        self._msb = value
-
-    @property
-    def lsb(self):
-        return self._lsb
-
-    @lsb.setter
-    def lsb(self, value):
-        self._lsb = value
-
-    def _get_aldb_key(self):
-        offset = 7 - (self.lsb % 8)
-        highest_byte = self.lsb + offset
-        key = bytes([self.msb, highest_byte])
+    def _get_aldb_key(self, msb, lsb):
+        offset = 7 - (lsb % 8)
+        highest_byte = lsb + offset
+        key = bytes([msb, highest_byte])
         return BYTE_TO_HEX(key)
 
     def query_aldb(self):
+        self.clear_all_records()
         if self._parent.attribute('engine_version') == 0:
-            self._msb = 0x0F
-            self._lsb = 0xF8
-            self._parent.send_command('set_address_msb', 'query_aldb')
+            self.i1_start_aldb_entry_query(0x0F, 0xF8)
         else:
-            self._msb = 0x00
-            self._lsb = 0x00
-            self._parent.send_command('read_aldb', 'query_aldb')
+            dev_bytes = {'msb': 0x00, 'lsb': 0x00}
+            self._parent.send_command('read_aldb',
+                                      'query_aldb',
+                                      dev_bytes=dev_bytes)
+            # It would be nice to link the trigger to the msb and lsb, but we
+            # don't technically have that yet at this point
+            trigger_attributes = {
+                'plm_cmd': 0x51,
+                'cmd_1': 0x2F,
+                'from_addr_hi': self._parent.dev_addr_hi,
+                'from_addr_mid': self._parent.dev_addr_mid,
+                'from_addr_low': self._parent.dev_addr_low,
+            }
+            trigger = Trigger(trigger_attributes)
+            trigger.trigger_function = lambda: self.i2_next_aldb()
+            trigger_name = self._parent.device_id_str + 'query_aldb'
+            self._parent.plm._trigger_mngr.add_trigger(trigger_name, trigger)
+
+    def i2_next_aldb(self):
+        # TODO parse by real names on incomming
+        msb = self._parent.last_rcvd_msg.get_byte_by_name('usr_3')
+        lsb = self._parent.last_rcvd_msg.get_byte_by_name('usr_4')
+        if self.is_last_aldb(self._get_aldb_key(msb, lsb)):
+            self._parent.remove_state_machine('query_aldb')
+            records = self.get_all_records()
+            for key in sorted(records):
+                print(key, ":", BYTE_TO_HEX(records[key]))
+            self._parent.send_command('light_status_request', 'set_aldb_delta')
+        else:
+            if lsb == 0x07:
+                msb -= 1
+                lsb = 0xFF
+            else:
+                lsb -= 8
+            dev_bytes = {'msb': msb, 'lsb': lsb}
+            self._parent.send_command('read_aldb',
+                                      'query_aldb',
+                                      dev_bytes=dev_bytes)
+            # Set Trigger
+            trigger_attributes = {
+                'plm_cmd': 0x51,
+                'cmd_1': 0x2F,
+                'usr_3': msb,
+                'usr_4': lsb,
+                'from_addr_hi': self._parent.dev_addr_hi,
+                'from_addr_mid': self._parent.dev_addr_mid,
+                'from_addr_low': self._parent.dev_addr_low,
+            }
+            trigger = Trigger(trigger_attributes)
+            trigger.trigger_function = lambda: self.i2_next_aldb()
+            trigger_name = self._parent.device_id_str + 'query_aldb'
+            self._parent.plm._trigger_mngr.add_trigger(trigger_name, trigger)
+
+    def i1_start_aldb_entry_query(self, msb, lsb):
+        message = self._parent.create_message('set_address_msb')
+        message._insert_bytes_into_raw({'msb': msb})
+        message.insteon_msg.device_success_callback = \
+            lambda: \
+            self.peek_aldb(lsb)
+        self._parent._queue_device_msg(message, 'query_aldb')
+
+    def peek_aldb(self, lsb):
+        message = self._parent.create_message('peek_one_byte')
+        message._insert_bytes_into_raw({'lsb': lsb})
+        self._parent._queue_device_msg(message, 'query_aldb')
 
     def create_responder(self, controller, d1, d2, d3):
                 # Device Responder
@@ -151,6 +194,13 @@ class Device_ALDB(ALDB):
     def create_controller(responder):
                 # Device controller
                 # D1 03 Hops?? D2 00 D3 Group 01 of responding device??
+        pass
+
+    def _write_link(self, linked_obj, is_controller):
+        if self._parent.attribute('engine_version') == 2:
+            pass  # run i2cs commands
+        else:
+            pass  # run i1 commands
         pass
 
 
@@ -181,9 +231,9 @@ class PLM_ALDB(ALDB):
             'controller': True if is_plm_controller else False,
             'responder': False if is_plm_controller else True,
             'group': group,
-            'dev_addr_hi': linked_obj.dev_id_hi,
-            'dev_addr_mid': linked_obj.dev_id_mid,
-            'dev_addr_low': linked_obj.dev_id_low,
+            'dev_addr_hi': linked_obj.dev_addr_hi,
+            'dev_addr_mid': linked_obj.dev_addr_mid,
+            'dev_addr_low': linked_obj.dev_addr_low,
         }
         del link_bytes['controller']
         del link_bytes['responder']
@@ -369,16 +419,16 @@ class Insteon_Group(object):
         return 1
 
     @property
-    def dev_id_hi(self):
-        return self._parent._dev_id_hi
+    def dev_addr_hi(self):
+        return self._parent._dev_addr_hi
 
     @property
-    def dev_id_mid(self):
-        return self._parent._dev_id_mid
+    def dev_addr_mid(self):
+        return self._parent._dev_addr_mid
 
     @property
-    def dev_id_low(self):
-        return self._parent._dev_id_low
+    def dev_addr_low(self):
+        return self._parent._dev_addr_low
 
     @property
     def dev_cat(self):
@@ -425,43 +475,37 @@ class Trigger_Manager(object):
         self._parent = parent
         self._triggers = {}
 
-    def add_trigger(self, trigger_obj):
-        self._triggers[time.time()] = trigger_obj
+    def add_trigger(self, trigger_name, trigger_obj):
+        '''The trigger_name must be unique to each trigger_obj.  Using the same
+        name will cause the prior trigger to be overwritten in the trigger
+        manager'''
+        self._triggers[trigger_name] = trigger_obj
 
     # TODO remove expired triggers?
 
     def match_msg(self, msg):
-        parsed_msg = msg.parsed_attributes
-        delete_keys = []
+        haystack = msg.parsed_attributes
+        matched_keys = []
         for trigger_key, trigger in self._triggers.items():
-            if trigger.msg_name == msg.plm_cmd_type:
-                trigger_match = True
-                for test_key, test_val in trigger.attributes.items():
-                    if test_key in parsed_msg:
-                        if (
-                                trigger.attributes[test_key] ==
-                                parsed_msg[test_key]
-                        ):
-                            pass  # match
-                        else:
-                            trigger_match = False
-                            break
-                # end loop of test attributes
-                if (trigger_match):
-                    self.run_trigger(msg, trigger_key)
-                    delete_keys.append(trigger_key)
-        # end loop of triggers
-        for trigger_key in delete_keys:
+            needle = trigger.attributes
+            trigger_match = True
+            for test_key, test_val in needle.items():
+                if ((test_key in haystack) and
+                        (needle[test_key] != haystack[test_key])):
+                    trigger_match = False
+                    break
+            if (trigger_match):
+                matched_keys.append(trigger_key)
+        for trigger_key in matched_keys:
+            # Delete trigger before running, to allow reusing same trigger_key
+            trigger = self._triggers[trigger_key]
+            trigger_function = trigger.trigger_function
             del self._triggers[trigger_key]
+            trigger_function()
 
     def run_trigger(self, msg, trigger_key):
         trigger = self._triggers[trigger_key]
-        if msg.plm_resp_ack and trigger.ack_function != '':
-            trigger.ack_function()
-        elif msg.plm_resp_nack and trigger.nack_function != '':
-            trigger.nack_function()
-        elif msg.plm_resp_bad_cmd and trigger.bad_cmd_function != '':
-            trigger.bad_cmd_function()
+        trigger.trigger_function()
 
     def delete_matching_attr(self, msg_name, attributes={}):
         pass
@@ -469,48 +513,21 @@ class Trigger_Manager(object):
 
 class Trigger(object):
 
-    def __init__(self, msg_name, attributes={}):
+    def __init__(self, attributes={}):
         '''Trigger functions will be called when a message matching all of the
-        identified attributes is received.  The function matching the type of
-        ack/nack/bad_cmd type is called.  In any case, even if no function
-        is defined, the trigger is then deleted.'''
-        self._msg_name = msg_name
+        identified attributes is received the trigger is then deleted.'''
         self._msg_attributes = attributes
-        self._ack_function = ''
-        self._nack_function = ''
-        self._bad_cmd_function = ''
+        self._trigger_function = lambda: None
 
     @property
-    def ack_function(self):
-        """Contains a function to be called on an ACK trigger"""
-        return self._ack_function
+    def trigger_function(self):
+        """Contains a function to be called on a trigger"""
+        return self._trigger_function
 
-    @ack_function.setter
-    def ack_function(self, function):
-        self._ack_function = function
-
-    @property
-    def nack_function(self):
-        """Contains a function to be called on an NACK trigger"""
-        return self._nack_function
-
-    @nack_function.setter
-    def nack_function(self, function):
-        self._nack_function = function
-
-    @property
-    def bad_cmd_function(self):
-        """Contains a function to be called on an bad_cmd trigger"""
-        return self._bad_cmd_function
-
-    @bad_cmd_function.setter
-    def bad_cmd_function(self, function):
-        self._bad_cmd_function = function
+    @trigger_function.setter
+    def trigger_function(self, function):
+        self._trigger_function = function
 
     @property
     def attributes(self):
         return self._msg_attributes
-
-    @property
-    def msg_name(self):
-        return self._msg_name

@@ -4,7 +4,8 @@ import datetime
 import pprint
 
 from .insteon_device import Insteon_Device
-from .base_objects import Base_Device, PLM_ALDB, Insteon_Group, Trigger_Manager, Trigger, Root_Insteon
+from .base_objects import PLM_ALDB, Insteon_Group, Trigger_Manager, Trigger, \
+    Root_Insteon
 from .message import PLM_Message
 from .helpers import *
 from .msg_schema import *
@@ -72,7 +73,7 @@ class PLM(Root_Insteon):
         self._trigger_mngr = Trigger_Manager(self)
         super().__init__(core, self, **kwargs)
         self._read_buffer = bytearray()
-        self._last_msg = ''
+        self._last_sent_msg = ''
         self._msg_queue = []
         self._wait_to_send = 0
         self._last_x10_house = ''
@@ -243,16 +244,16 @@ class PLM(Root_Insteon):
         return ret
 
     def _send_msg(self, msg):
-        self._last_msg = msg
+        self._last_sent_msg = msg
         self.write(msg)
 
     def _resend_failed_msg(self):
-        msg = self._last_msg
+        msg = self._last_sent_msg
         msg.plm_ack = False
         if msg._insteon_msg:
             msg._insteon_msg.hops_left += 1
             msg._insteon_msg.max_hops += 1
-        self._last_msg = {}
+        self._last_sent_msg = {}
         if msg._device:
             msg._device._resend_msg(msg)
         else:
@@ -277,13 +278,13 @@ class PLM(Root_Insteon):
         return
 
     def plm_info(self, msg_obj):
-        if self._last_msg.plm_cmd_type == 'plm_info' and msg_obj.plm_resp_ack:
-            self._last_msg.plm_ack = True
-            self._dev_id_hi = msg_obj.get_byte_by_name('plm_addr_hi')
-            self._dev_id_mid = msg_obj.get_byte_by_name('plm_addr_mid')
-            self._dev_id_low = msg_obj.get_byte_by_name('plm_addr_low')
+        if self._last_sent_msg.plm_cmd_type == 'plm_info' and msg_obj.plm_resp_ack:
+            self._last_sent_msg.plm_ack = True
+            self._dev_addr_hi = msg_obj.get_byte_by_name('plm_addr_hi')
+            self._dev_addr_mid = msg_obj.get_byte_by_name('plm_addr_mid')
+            self._dev_addr_low = msg_obj.get_byte_by_name('plm_addr_low')
             self.device_id = BYTE_TO_HEX(
-                bytes([self._dev_id_hi, self._dev_id_mid, self._dev_id_low]))
+                bytes([self._dev_addr_hi, self._dev_addr_mid, self._dev_addr_low]))
             self.attribute('dev_cat', msg_obj.get_byte_by_name('dev_cat'))
             self.attribute('sub_cat', msg_obj.get_byte_by_name('sub_cat'))
             self.attribute('firmware', msg_obj.get_byte_by_name('firmware'))
@@ -302,7 +303,7 @@ class PLM(Root_Insteon):
     def process_unacked_msg(self):
         '''checks for unacked messages'''
         if self._is_ack_pending():
-            msg = self._last_msg
+            msg = self._last_sent_msg
         else:
             return
         now = datetime.datetime.now().strftime("%M:%S.%f")
@@ -366,26 +367,26 @@ class PLM(Root_Insteon):
                 if dev_msg:
                     if dev_msg.insteon_msg:
                         device = dev_msg.device
-                        device.last_msg = dev_msg
+                        device.last_sent_msg = dev_msg
                     self._send_msg(dev_msg)
 
     def _is_ack_pending(self):
         ret = False
-        if self._last_msg and not self._last_msg.failed:
-            if self._last_msg.seq_lock:
+        if self._last_sent_msg and not self._last_sent_msg.failed:
+            if self._last_sent_msg.seq_lock:
                 ret = True
-            elif not self._last_msg.plm_ack:
+            elif not self._last_sent_msg.plm_ack:
                 ret = True
-            elif (self._last_msg.insteon_msg and
-                    not self._last_msg.insteon_msg.device_ack):
+            elif (self._last_sent_msg.insteon_msg and
+                    not self._last_sent_msg.insteon_msg.device_ack):
                 ret = True
         return ret
 
     def rcvd_plm_ack(self, msg):
-        if (self._last_msg.plm_ack is False and
-                msg.raw_msg[0:-1] == self._last_msg.raw_msg):
-            self._last_msg.plm_ack = True
-            self._last_msg.time_plm_ack = time.time()
+        if (self._last_sent_msg.plm_ack is False and
+                msg.raw_msg[0:-1] == self._last_sent_msg.raw_msg):
+            self._last_sent_msg.plm_ack = True
+            self._last_sent_msg.time_plm_ack = time.time()
         else:
             print('received spurious plm ack')
 
@@ -420,10 +421,13 @@ class PLM(Root_Insteon):
     def rcvd_all_link_manage_nack(self, msg):
         print('error writing aldb to PLM, will rescan plm and try again')
         plm = self
-        self._last_msg.failed = True
+        self._last_sent_msg.failed = True
         self._aldb.query_aldb()
-        trigger_attributes = {'plm_resp': 0x15}
-        trigger = Trigger('all_link_next_rec', trigger_attributes)
+        trigger_attributes = {
+            'plm_cmd': 0x6A,
+            'plm_resp': 0x15
+        }
+        trigger = Trigger(trigger_attributes)
         dev_addr_hi = msg.get_byte_by_name('dev_addr_hi')
         dev_addr_mid = msg.get_byte_by_name('dev_addr_mid')
         dev_addr_low = msg.get_byte_by_name('dev_addr_low')
@@ -434,13 +438,16 @@ class PLM(Root_Insteon):
             plm = self.get_object_by_group_num(msg.get_byte_by_name('group'))
             is_controller = True
         else:
-            device = device.get_object_by_group_num(msg.get_byte_by_name('group'))
-        trigger.nack_function = lambda: plm._aldb._write_link(device, is_controller)
-        self._trigger_mngr.add_trigger(trigger)
+            device = device.get_object_by_group_num(
+                msg.get_byte_by_name('group'))
+        trigger.trigger_function = lambda: plm._aldb._write_link(
+            device, is_controller)
+        self._trigger_mngr.add_trigger('rcvd_all_link_manage_nack', trigger)
 
     def rcvd_insteon_msg(self, msg):
         insteon_obj = self.get_device_by_addr(msg.insteon_msg.from_addr_str)
-        insteon_obj.msg_rcvd(msg)
+        if insteon_obj is not None:
+            insteon_obj.msg_rcvd(msg)
 
     def rcvd_plm_x10_ack(self, msg):
         # For some reason we have to slow down when sending X10 msgs to the PLM
@@ -452,7 +459,7 @@ class PLM(Root_Insteon):
         self.send_command('all_link_next_rec', 'query_aldb')
 
     def end_of_aldb(self, msg):
-        self._last_msg.plm_ack = True
+        self._last_sent_msg.plm_ack = True
         self.remove_state_machine('query_aldb')
         print('reached the end of the PLMs ALDB')
         records = self._aldb.get_all_records()
@@ -511,8 +518,8 @@ class PLM(Root_Insteon):
             print("Message ignored")
 
     def rcvd_all_link_clean_status(self, msg):
-        if self._last_msg.plm_cmd_type == 'all_link_send':
-            self._last_msg.seq_lock = False
+        if self._last_sent_msg.plm_cmd_type == 'all_link_send':
+            self._last_sent_msg.seq_lock = False
             if msg.plm_resp_ack:
                 print('Send All Link - Success')
                 self.remove_state_machine('all_link_send')
@@ -538,4 +545,4 @@ class PLM(Root_Insteon):
 
     def rcvd_all_link_start(self, msg):
         if msg.plm_resp_ack:
-            self._last_msg.plm_ack = True
+            self._last_sent_msg.plm_ack = True

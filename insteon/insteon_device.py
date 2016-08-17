@@ -14,10 +14,11 @@ class Insteon_Device(Root_Insteon):
         self._aldb = Device_ALDB(self)
         super().__init__(core, plm, **kwargs)
         id_bytes = ID_STR_TO_BYTES(kwargs['device_id'])
-        self._dev_id_hi = id_bytes[0]
-        self._dev_id_mid = id_bytes[1]
-        self._dev_id_low = id_bytes[2]
-        self.last_msg = ''
+        self._dev_addr_hi = id_bytes[0]
+        self._dev_addr_mid = id_bytes[1]
+        self._dev_addr_low = id_bytes[2]
+        self.last_sent_msg = ''
+        self.last_rcvd_msg = ''
         self._recent_inc_msgs = {}
         self._init_step_1()
 
@@ -41,20 +42,20 @@ class Insteon_Device(Root_Insteon):
     @property
     def device_id_str(self):
         ret = BYTE_TO_HEX(
-            bytes([self._dev_id_hi, self._dev_id_mid, self._dev_id_low]))
+            bytes([self._dev_addr_hi, self._dev_addr_mid, self._dev_addr_low]))
         return ret
 
     @property
-    def dev_id_hi(self):
-        return self._dev_id_hi
+    def dev_addr_hi(self):
+        return self._dev_addr_hi
 
     @property
-    def dev_id_mid(self):
-        return self._dev_id_mid
+    def dev_addr_mid(self):
+        return self._dev_addr_mid
 
     @property
-    def dev_id_low(self):
-        return self._dev_id_low
+    def dev_addr_low(self):
+        return self._dev_addr_low
 
     @property
     def dev_cat(self):
@@ -87,6 +88,7 @@ class Insteon_Device(Root_Insteon):
 
     def msg_rcvd(self, msg):
         self._set_plm_wait(msg)
+        self.last_rcvd_msg = msg
         if self._is_duplicate(msg):
             print('Skipped duplicate msg')
             return
@@ -107,13 +109,13 @@ class Insteon_Device(Root_Insteon):
             # TODO set state of the device based on cmd acked
             # Clear queued cleanup messages if they exist
             self._remove_cleanup_msgs(msg)
-            if (self.last_msg and
-                    self.last_msg.get_byte_by_name('cmd_1') ==
+            if (self.last_sent_msg and
+                    self.last_sent_msg.get_byte_by_name('cmd_1') ==
                     msg.get_byte_by_name('cmd_1') and
-                    self.last_msg.get_byte_by_name('cmd_2') ==
+                    self.last_sent_msg.get_byte_by_name('cmd_2') ==
                     msg.get_byte_by_name('cmd_2')):
                 # Only set ack if this was sent by this device
-                self.last_msg.insteon_msg.device_ack = True
+                self.last_sent_msg.insteon_msg.device_ack = True
 
     def _remove_cleanup_msgs(self, msg):
         cmd_1 = msg.get_byte_by_name('cmd_1')
@@ -158,7 +160,7 @@ class Insteon_Device(Root_Insteon):
         self._add_to_hop_array(hops_used)
         if not self._is_valid_direct_ack(msg):
             return
-        elif (self.last_msg.insteon_msg.device_cmd_name ==
+        elif (self.last_sent_msg.insteon_msg.device_cmd_name ==
                 'light_status_request'):
             print('was status response')
             aldb_delta = msg.get_byte_by_name('cmd_1')
@@ -170,8 +172,8 @@ class Insteon_Device(Root_Insteon):
                 self._aldb.query_aldb()
             # TODO, we want to change aldb_deltas that are at 0x00
             self.attribute('status', msg.get_byte_by_name('cmd_2'))
-            self.last_msg.insteon_msg.device_ack = True
-        elif (self.last_msg.get_byte_by_name('cmd_1') ==
+            self.last_sent_msg.insteon_msg.device_ack = True
+        elif (self.last_sent_msg.get_byte_by_name('cmd_1') ==
                 msg.get_byte_by_name('cmd_1')):
             if msg.get_byte_by_name('cmd_1') in STD_DIRECT_ACK_SCHEMA:
                 command = STD_DIRECT_ACK_SCHEMA[msg.get_byte_by_name('cmd_1')]
@@ -179,18 +181,19 @@ class Insteon_Device(Root_Insteon):
                     ['DevCat', self.attribute('dev_cat')],
                     ['SubCat', self.attribute('sub_cat')],
                     ['Firmware', self.attribute('firmware')],
-                    ['Cmd2', self.last_msg.get_byte_by_name('cmd_2')]
+                    ['Cmd2', self.last_sent_msg.get_byte_by_name('cmd_2')]
                 ]
                 for search_item in search_list:
                     command = self._recursive_search_cmd(command, search_item)
                     if not command:
                         print('not sure how to respond to this')
                         return
-                command(self, msg)
-                self.last_msg.insteon_msg.device_ack = True
+                is_ack = command(self, msg)
+                if is_ack != False:
+                    self.last_sent_msg.insteon_msg.device_ack = True
             else:
                 print('rcvd ack, nothing to do')
-                self.last_msg.insteon_msg.device_ack = True
+                self.last_sent_msg.insteon_msg.device_ack = True
         else:
             print('ignoring an unmatched ack')
             pprint.pprint(msg.__dict__)
@@ -201,7 +204,7 @@ class Insteon_Device(Root_Insteon):
         self._add_to_hop_array(hops_used)
         if not self._is_valid_direct_ack(msg):
             return
-        elif (self.last_msg.get_byte_by_name('cmd_1') ==
+        elif (self.last_sent_msg.get_byte_by_name('cmd_1') ==
                 msg.get_byte_by_name('cmd_1')):
             if (self.attribute('engine_version') == 0x02 or
                     self.attribute('engine_version') == None):
@@ -209,32 +212,32 @@ class Insteon_Device(Root_Insteon):
                 if cmd_2 == 0xFF:
                     print('nack received, senders ID not in database')
                     self.attribute('engine_version', 0x02)
-                    self.last_msg.insteon_msg.device_ack = True
+                    self.last_sent_msg.insteon_msg.device_ack = True
                     print('creating plm->device link')
                     self.add_plm_to_dev_link()
                 elif cmd_2 == 0xFE:
                     print('nack received, no load')
                     self.attribute('engine_version', 0x02)
-                    self.last_msg.insteon_msg.device_ack = True
+                    self.last_sent_msg.insteon_msg.device_ack = True
                 elif cmd_2 == 0xFD:
                     print('nack received, checksum is incorrect, resending')
                     self.attribute('engine_version', 0x02)
                     self.plm.wait_to_send = 1
-                    self._resend_msg(self.last_msg)
+                    self._resend_msg(self.last_sent_msg)
                 elif cmd_2 == 0xFC:
                     print(
                         'nack received, Pre nack in case database search takes too long')
                     self.attribute('engine_version', 0x02)
-                    self.last_msg.insteon_msg.device_ack = True
+                    self.last_sent_msg.insteon_msg.device_ack = True
                 elif cmd_2 == 0xFB:
                     print('nack received, illegal value in command')
                     self.attribute('engine_version', 0x02)
-                    self.last_msg.insteon_msg.device_ack = True
+                    self.last_sent_msg.insteon_msg.device_ack = True
                 else:
                     print(
                         'device nack`ed the last command, no further details, resending')
                     self.plm.wait_to_send = 1
-                    self._resend_msg(self.last_msg)
+                    self._resend_msg(self.last_sent_msg)
             else:
                 print('device nack`ed the last command, resending')
                 self.plm.wait_to_send = 1
@@ -243,10 +246,10 @@ class Insteon_Device(Root_Insteon):
 
     def _is_valid_direct_ack(self, msg):
         ret = True
-        if self.last_msg.plm_ack != True:
+        if self.last_sent_msg.plm_ack != True:
             print('ignoring a device response received before PLM ack')
             ret = False
-        elif self.last_msg.insteon_msg.device_ack != False:
+        elif self.last_sent_msg.insteon_msg.device_ack != False:
             print('ignoring an unexpected device response')
             ret = False
         return ret
@@ -320,83 +323,76 @@ class Insteon_Device(Root_Insteon):
 
     def ack_set_msb(self, msg):
         '''currently called when set_address_msb ack received'''
-        if (self.state_machine == 'query_aldb' and
-                (self.last_msg.get_byte_by_name('cmd_2') ==
-                 msg.get_byte_by_name('cmd_2'))
-            ):
-            self.peek_aldb()
+        if (self.last_sent_msg.insteon_msg.device_cmd_name == 'set_address_msb' and
+                    (self.last_sent_msg.get_byte_by_name('cmd_2') ==
+                     msg.get_byte_by_name('cmd_2'))
+                ):
+            ret = True
+        else:
+            ret = False
+        return ret
 
     def ack_peek_aldb(self, msg):
-        if self.state_machine == 'query_aldb' and \
-           self.last_msg.insteon_msg.device_cmd_name == 'peek_one_byte':
-            if (self._aldb.lsb % 8) == 0:
+        if (self.last_sent_msg.insteon_msg.device_cmd_name == 'peek_one_byte' and
+                not (self.last_sent_msg.insteon_msg.device_ack)):
+            peek_msg = self.search_last_sent_msg(insteon_cmd='peek_one_byte')
+            lsb = peek_msg.get_byte_by_name('cmd_2')
+            msb_msg = self.search_last_sent_msg(insteon_cmd='set_address_msb')
+            msb = msb_msg.get_byte_by_name('cmd_2')
+            if (lsb % 8) == 0:
                 self._aldb.edit_record(
-                    self._aldb._get_aldb_key(), bytearray(8))
+                    self._aldb._get_aldb_key(msb, lsb), bytearray(8))
             self._aldb.edit_record_byte(
-                self._aldb._get_aldb_key(),
-                self._aldb.lsb % 8,
+                self._aldb._get_aldb_key(msb, lsb),
+                lsb % 8,
                 msg.get_byte_by_name('cmd_2')
             )
-            if self._aldb.is_last_aldb(self._aldb._get_aldb_key()):
+            if self._aldb.is_last_aldb(self._aldb._get_aldb_key(msb, lsb)):
                 # this is the last entry on this device
                 records = self._aldb.get_all_records()
                 for key in sorted(records):
                     print(key, ":", BYTE_TO_HEX(records[key]))
                 self.remove_state_machine('query_aldb')
                 self.send_command('light_status_request', 'set_aldb_delta')
-            elif self._aldb.is_empty_aldb(self._aldb._get_aldb_key()):
+            elif self._aldb.is_empty_aldb(self._aldb._get_aldb_key(msb, lsb)):
                 # this is an empty record
                 print('empty record')
-                self._aldb.lsb = self._aldb.lsb - (8 + (self._aldb.lsb % 8))
-                self.peek_aldb()
-            elif self._aldb.lsb == 7:
+                lsb = lsb - (8 + (lsb % 8))
+                self._aldb.peek_aldb(lsb)
+            elif lsb == 7:
                 # Change MSB
-                self._aldb.msb -= 1
-                self._aldb.lsb = 0xF8
-                self.send_command('set_address_msb', 'query_aldb')
-            elif (self._aldb.lsb % 8) == 7:
-                self._aldb.lsb -= 15
-                self.peek_aldb()
+                msb -= 1
+                lsb = 0xF8
+                self._aldb.i1_start_aldb_entry_query(msb, lsb)
+            elif (lsb % 8) == 7:
+                lsb -= 15
+                self._aldb.peek_aldb(lsb)
             else:
-                self._aldb.lsb += 1
-                self.peek_aldb()
+                lsb += 1
+                self._aldb.peek_aldb(lsb)
 
     def _ext_aldb_rcvd(self, msg):
+        # Duplicate messages will not cause errors, so we don't check for them
+        last_msg = self.search_last_sent_msg(insteon_cmd='read_aldb')
+        req_msb = last_msg.get_byte_by_name('usr_3')
+        req_lsb = last_msg.get_byte_by_name('usr_4')
         msg_msb = msg.get_byte_by_name('usr_3')
         msg_lsb = msg.get_byte_by_name('usr_4')
-        if (self._aldb.lsb == 0x00 and self._aldb.msb == 0x00):
-            self._aldb.lsb = msg_lsb
-            self._aldb.msb = msg_msb
-        elif (self._aldb.lsb != msg_lsb or self._aldb.msb != msg_msb):
-            # this is not the record that we requested
-            return
-        aldb_entry = bytearray([
-            msg.get_byte_by_name('usr_6'),
-            msg.get_byte_by_name('usr_7'),
-            msg.get_byte_by_name('usr_8'),
-            msg.get_byte_by_name('usr_9'),
-            msg.get_byte_by_name('usr_10'),
-            msg.get_byte_by_name('usr_11'),
-            msg.get_byte_by_name('usr_12'),
-            msg.get_byte_by_name('usr_13')
-        ])
-        self._aldb.edit_record(self._aldb._get_aldb_key(), aldb_entry)
-        self.last_msg.insteon_msg.device_ack = True
-        if self.state_machine == 'query_aldb':
-            if self._aldb.is_last_aldb(self._aldb._get_aldb_key()):
-                self.remove_state_machine('query_aldb')
-                # this is the last entry on this device
-                records = self._aldb.get_all_records()
-                for key in sorted(records):
-                    print(key, ":", BYTE_TO_HEX(records[key]))
-                self.send_command('light_status_request', 'set_aldb_delta')
-            else:
-                if self._aldb.lsb == 0x07:
-                    self._aldb.msb -= 1
-                    self._aldb.lsb = 0xFF
-                else:
-                    self._aldb.lsb -= 8
-                self.send_command('read_aldb', 'query_aldb')
+        if ((req_lsb == msg_lsb and req_msb == msg_msb) or
+                (req_lsb == 0x00 and req_msb == 0x00)):
+            aldb_entry = bytearray([
+                msg.get_byte_by_name('usr_6'),
+                msg.get_byte_by_name('usr_7'),
+                msg.get_byte_by_name('usr_8'),
+                msg.get_byte_by_name('usr_9'),
+                msg.get_byte_by_name('usr_10'),
+                msg.get_byte_by_name('usr_11'),
+                msg.get_byte_by_name('usr_12'),
+                msg.get_byte_by_name('usr_13')
+            ])
+            self._aldb.edit_record(self._aldb._get_aldb_key(msg_msb, msg_lsb),
+                                   aldb_entry)
+            self.last_sent_msg.insteon_msg.device_ack = True
 
     def _set_engine_version(self, msg):
         version = msg.get_byte_by_name('cmd_2')
@@ -468,9 +464,6 @@ class Insteon_Device(Root_Insteon):
             return catch_all_cmd
         else:
             return False
-
-    def peek_aldb(self):
-        self.send_command('peek_one_byte', 'query_aldb')
 
     def write_aldb_record(self, msb, lsb):
         # TODO This is only the base structure still need to add more basically just

@@ -30,8 +30,8 @@ must be defined
                         the arrival of a msg without an ACK,NACK, or Bad_Cmd
         'recv_byte_pos' : {
             '<name>' : <int> - the name is a standardized description of the
-                           byte.
-                       The int, is the position of the byte within the bytearray
+                           byte. The int, is the position of the byte within
+                           the bytearray
         }
     }
 }
@@ -44,6 +44,7 @@ PLM_SCHEMA = {
         'name': 'insteon_received',
         'recv_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'from_addr_hi': 2,
             'from_addr_mid': 3,
             'from_addr_low': 4,
@@ -61,6 +62,7 @@ PLM_SCHEMA = {
         'name': 'insteon_ext_received',
         'recv_act': lambda obj, msg: obj.rcvd_insteon_msg(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'from_addr_hi': 2,
             'from_addr_mid': 3,
             'from_addr_low': 4,
@@ -92,6 +94,7 @@ PLM_SCHEMA = {
         'recv_act': lambda obj, msg: obj.rcvd_x10(msg),
         'name': 'x10_received',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'raw_x10': 2,
             'x10_flags': 3,
         }
@@ -102,6 +105,7 @@ PLM_SCHEMA = {
         'name': 'all_link_complete',
         'recv_act': lambda obj, msg: obj.rcvd_all_link_complete(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'link_code': 2,
             'group': 3,
             'from_addr_hi': 4,
@@ -118,6 +122,7 @@ PLM_SCHEMA = {
         'recv_act': lambda obj, msg: obj.rcvd_btn_event(msg),
         'name': 'plm_button_event',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'btn_event': 2,
         }
     },
@@ -127,6 +132,7 @@ PLM_SCHEMA = {
         'recv_act': lambda obj, msg: obj.rcvd_plm_reset(msg),
         'name': 'user_plm_reset',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             # No other recv_byte_pos
         }
     },
@@ -136,6 +142,7 @@ PLM_SCHEMA = {
         'name': 'all_link_clean_failed',
         'recv_act': lambda obj, msg: obj.rcvd_all_link_clean_failed(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'link_fail': 2,
             'group': 3,
             'fail_addr_hi': 4,
@@ -149,6 +156,7 @@ PLM_SCHEMA = {
         'recv_act': lambda obj, msg: obj.rcvd_aldb_record(msg),
         'name': 'all_link_record',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'link_flags': 2,
             'group': 3,
             'dev_addr_hi': 4,
@@ -165,6 +173,7 @@ PLM_SCHEMA = {
         'ack_act': lambda obj, msg: obj.rcvd_all_link_clean_status(msg),
         'name': 'all_link_clean_status',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -174,6 +183,7 @@ PLM_SCHEMA = {
         'name': 'plm_info',
         'ack_act': lambda obj, msg: obj.plm_info(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_addr_hi': 2,
             'plm_addr_mid': 3,
             'plm_addr_low': 4,
@@ -183,6 +193,7 @@ PLM_SCHEMA = {
             'plm_resp': 8
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
         }
     },
     0x61: {
@@ -191,12 +202,14 @@ PLM_SCHEMA = {
         'name': 'all_link_send',
         'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'group': 2,
             'cmd_1': 3,
             'cmd_2': 4,
             'plm_resp': 5
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
             'group': 2,
             'cmd_1': 3,
             'cmd_2': 4,
@@ -208,6 +221,7 @@ PLM_SCHEMA = {
         'name': 'insteon_send',
         'ack_act': lambda obj, msg: obj.rcvd_plm_ack(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'to_addr_hi': 2,
             'to_addr_mid': 3,
             'to_addr_low': 4,
@@ -232,6 +246,7 @@ PLM_SCHEMA = {
             'plm_resp_e': 22,
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
             'to_addr_hi': 2,
             'to_addr_mid': 3,
             'to_addr_low': 4,
@@ -260,11 +275,13 @@ PLM_SCHEMA = {
         'ack_act': lambda obj, msg: obj.rcvd_plm_x10_ack(msg),
         'name': 'x10_send',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'raw_x10': 2,
             'x10_flags': 3,
             'plm_resp': 4,
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
             'raw_x10': 2,
             'x10_flags': 3,
         }
@@ -275,12 +292,17 @@ PLM_SCHEMA = {
         'ack_act': lambda obj, msg: obj.rcvd_all_link_start(msg),
         'name': 'all_link_start',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'link_code': 2,
             'group': 3,
             'plm_resp': 4
         },
         'send_byte_pos': {
-            'link_code': 2,  # 0x00 Responder, 0x01 Controller, 0x03 Dynamic, 0xFF Delete
+            'plm_cmd': 1,
+            'link_code': 2,  # 0x00 Responder,
+                             # 0x01 Controller,
+                             # 0x03 Dynamic,
+                             # 0xFF Delete
             'group': 3
         }
     },
@@ -288,6 +310,7 @@ PLM_SCHEMA = {
         'rcvd_len': (3,),
         'name': 'all_link_cancel',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -295,6 +318,7 @@ PLM_SCHEMA = {
         'rcvd_len': (6,),
         'name': 'set_host_device_cat',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'dev_cat': 2,
             'sub_cat': 3,
             'firmware': 4,
@@ -305,6 +329,7 @@ PLM_SCHEMA = {
         'rcvd_len': (3,),
         'name': 'plm_reset',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -312,6 +337,7 @@ PLM_SCHEMA = {
         'rcvd_len': (4,),
         'name': 'set_insteon_ack_cmd2',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'cmd_2': 2,
             'plm_resp': 3,
         }
@@ -323,9 +349,11 @@ PLM_SCHEMA = {
         'nack_act': lambda obj, msg: obj.end_of_aldb(msg),
         'name': 'all_link_first_rec',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
         }
     },
     0x6A: {
@@ -335,15 +363,18 @@ PLM_SCHEMA = {
         'nack_act': lambda obj, msg: obj.end_of_aldb(msg),
         'name': 'all_link_next_rec',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
         }
     },
     0x6B: {
         'rcvd_len': (4,),
         'name': 'plm_set_config',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'conf_flags': 2,
             'plm_resp': 3
         }
@@ -352,6 +383,7 @@ PLM_SCHEMA = {
         'rcvd_len': (3,),
         'name': 'get_sender_all_link_rec',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -359,6 +391,7 @@ PLM_SCHEMA = {
         'rcvd_len': (3,),
         'name': 'plm_led_on',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -366,6 +399,7 @@ PLM_SCHEMA = {
         'rcvd_len': (3,),
         'name': 'plm_led_off',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'plm_resp': 2,
         }
     },
@@ -376,6 +410,7 @@ PLM_SCHEMA = {
         'ack_act': lambda obj, msg: obj.rcvd_all_link_manage_ack(msg),
         'nack_act': lambda obj, msg: obj.rcvd_all_link_manage_nack(msg),
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'ctrl_code': 2,
             'link_flags': 3,
             'group': 4,
@@ -388,12 +423,16 @@ PLM_SCHEMA = {
             'plm_resp': 11
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
             'ctrl_code': 2,
             # 0x00 Find first
             # 0x01 Find next
-            # 0x20 Modify (matches on cont/resp, group,dev_id; not d1-3) NAK if not match
-            # 0x40 Add controller, (matching cont/resp, group,dev_id must not exist)
-            # 0x41 Add responder, (matching cont/resp, group,dev_id must not exist)
+            # 0x20 Modify (matches on cont/resp, group,dev_id; not d1-3)
+            # NAK if not match
+            # 0x40 Add controller, (matching cont/resp, group,dev_id
+            # must not exist)
+            # 0x41 Add responder, (matching cont/resp, group,dev_id
+            # must not exist)
             # 0x80 Delete (matches on cont/resp, group,dev_id; not d1-3)
             # NAK if no match
             'link_flags': 3,
@@ -410,6 +449,7 @@ PLM_SCHEMA = {
         'rcvd_len': (4,),
         'name': 'insteon_nak',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'cmd_1': 2,
             'cmd_2': 3,
             'plm_resp': 4,
@@ -419,6 +459,7 @@ PLM_SCHEMA = {
         'rcvd_len': (4,),
         'name': 'insteon_ack',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'cmd_2': 2,
             'plm_resp': 3,
         }
@@ -427,6 +468,7 @@ PLM_SCHEMA = {
         'rcvd_len': (5,),
         'name': 'rf_sleep',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'cmd_1': 2,
             'cmd_2': 3,
             'plm_resp': 4,
@@ -437,12 +479,14 @@ PLM_SCHEMA = {
         'send_len': (2,),
         'name': 'plm_get_config',
         'recv_byte_pos': {
+            'plm_cmd': 1,
             'conf_flags': 2,
             'spare_1': 3,
             'spare_2': 4,
             'plm_resp': 5
         },
         'send_byte_pos': {
+            'plm_cmd': 1,
         }
     },
 }
@@ -464,7 +508,8 @@ STD_DIRECT_ACK_SCHEMA = {
                         {'Firmware': 'all',
                             'value': [
                                 {'Cmd2': 'all',
-                                    'value': lambda x, y: x._set_engine_version(y)
+                                    'value': lambda x, y: \
+                                     x._set_engine_version(y)
                                  }
                             ]
                          }
@@ -667,7 +712,8 @@ STD_DIRECT_ACK_SCHEMA = {
                         {'Firmware': 'all',
                             'value': [
                                 {'Cmd2': 'all',
-                                    'value': lambda x, y: x.peek_byte_internal(y)
+                                    'value': lambda x, y: \
+                                    x.peek_byte_internal(y)
                                  }
                             ]
                          }
@@ -745,7 +791,8 @@ STD_DIRECT_ACK_SCHEMA = {
                                     'value': lambda x, y: x.thermo_ambient(y),
                                  },
                                 {'Cmd2': ('0D'),
-                                    'value': lambda x, y: x.thermo_equip_state(y),
+                                    'value': lambda x, y: \
+                                    x.thermo_equip_state(y),
                                  },
                                 {'Cmd2': ('0F'),
                                     'value': lambda x, y: x.thermo_get_temp(y),
@@ -794,17 +841,21 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x03,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x03
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-            ]
+             ]
          }
-    ],
+     ],
     'enter_link_mode': [
         {'DevCat': 'all',
             'value': [
@@ -812,31 +863,64 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x09,
-                                'cmd_2': 0x00,  # The group to link
-                                'usr_1': 0x00,  # Unused
-                                'usr_2': 0x00,  # Unused
-                                'usr_3': 0x00,  # Unused
-                                'usr_4': 0x00,  # Unused
-                                'usr_5': 0x00,  # Unused
-                                'usr_6': 0x00,  # Unused
-                                'usr_7': 0x00,  # Unused
-                                'usr_8': 0x00,  # Unused
-                                'usr_9': 0x00,  # Unused
-                                'usr_10': 0x00,  # Unused
-                                'usr_11': 0x00,  # Unused
-                                'usr_12': 0x00,  # Unused
-                                'usr_13': 0x00,  # Unused
-                                'usr_14': 0x00,  # Unused
+                                'cmd_1': {
+                                    'default': 0x09
+                                },
+                                'cmd_2': {
+                                    'default': 0x00,
+                                    'name': 'group'
+                                },
+                                'usr_1': {
+                                    'default': 0x00
+                                },
+                                'usr_2': {
+                                    'default': 0x00
+                                },
+                                'usr_3': {
+                                    'default': 0x00
+                                },
+                                'usr_4': {
+                                    'default': 0x00
+                                },
+                                'usr_5': {
+                                    'default': 0x00
+                                },
+                                'usr_6': {
+                                    'default': 0x00
+                                },
+                                'usr_7': {
+                                    'default': 0x00
+                                },
+                                'usr_8': {
+                                    'default': 0x00
+                                },
+                                'usr_9': {
+                                    'default': 0x00
+                                },
+                                'usr_10': {
+                                    'default': 0x00
+                                },
+                                'usr_11': {
+                                    'default': 0x00
+                                },
+                                'usr_12': {
+                                    'default': 0x00
+                                },
+                                'usr_13': {
+                                    'default': 0x00
+                                },
+                                'usr_14': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'extended',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-            ]
+             ]
          }
-    ],
+     ],
     'get_engine_version': [
         {'DevCat': 'all',
             'value': [
@@ -844,17 +928,21 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x0D,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x0D
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-            ]
+             ]
          }
-    ],
+     ],
     'light_status_request': [
         {'DevCat': (0x01, 0x02),
             'value': [
@@ -862,16 +950,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x19,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x19
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'id_request': [
         {'DevCat': 'all',
@@ -880,15 +972,19 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x10,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x10
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-            ]
+             ]
          }
     ],
     'on': [
@@ -898,16 +994,21 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x11,
-                                'cmd_2': lambda x: x.desired_on_level,
+                                'cmd_1': {
+                                    'default': 0x11
+                                },
+                                'cmd_2': {
+                                    'default': 0xFF,
+                                    'function': lambda x: x.desired_on_level
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'on': [
         {'DevCat': (0x02,),
@@ -916,16 +1017,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x11,
-                                'cmd_2': 0xFF,
+                                'cmd_1': {
+                                    'default': 0x11
+                                },
+                                'cmd_2': {
+                                    'default': 0xFF
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'on_cleanup': [
         {'DevCat': (0x01, 0x02),
@@ -934,16 +1039,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x11,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x11
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'alllink_cleanup'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'off': [
         {'DevCat': (0x01, 0x02),
@@ -952,16 +1061,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x13,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x13
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'off_cleanup': [
         {'DevCat': (0x01, 0x02),
@@ -970,16 +1083,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x13,
-                                'cmd_2': 0x00,
+                                'cmd_1': {
+                                    'default': 0x13
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'alllink_cleanup'
                             }
                          }
                     ]
                  }
-        ]
-        }
+             ]
+         }
     ],
     'set_address_msb': [
         {'DevCat': 'all',
@@ -988,15 +1105,20 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x28,
-                                'cmd_2': lambda x: x._aldb.msb,
+                                'cmd_1': {
+                                    'default': 0x28
+                                },
+                                'cmd_2': {
+                                    'default': 0x00,
+                                    'name': 'msb'
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
                          }
                     ]
                  }
-            ]
+             ]
          }
     ],
     'peek_one_byte': [
@@ -1006,8 +1128,13 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x2B,
-                                'cmd_2': lambda x: x._aldb.lsb,
+                                'cmd_1': {
+                                    'default': 0x2B
+                                },
+                                'cmd_2': {
+                                    'default': 0x00,
+                                    'name': 'lsb'
+                                },
                                 'msg_length': 'standard',
                                 'message_type': 'direct'
                             }
@@ -1024,22 +1151,57 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x2F,
-                                'cmd_2': 0x00,
-                                'usr_1': 0x00,  # Unused
-                                'usr_2': 0x00,  # Read ALDB
-                                'usr_3': lambda x: x._aldb.msb,  # Addr Hi
-                                'usr_4': lambda x: x._aldb.lsb,  # Addr Low
-                                'usr_5': 0x01,  # 0x00 = All, 0x01 = 1 Record
-                                'usr_6': 0x00,  # Unused
-                                'usr_7': 0x00,  # Unused
-                                'usr_8': 0x00,  # Unused
-                                'usr_9': 0x00,  # Unused
-                                'usr_10': 0x00,  # Unused
-                                'usr_11': 0x00,  # Unused
-                                'usr_12': 0x00,  # Unused
-                                'usr_13': 0x00,  # Unused
-                                'usr_14': 0x00,  # Unused
+                                'cmd_1': {
+                                    'default': 0x2F
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
+                                'usr_1': {
+                                    'default': 0x00
+                                },
+                                'usr_2': {
+                                    'default': 0x00
+                                },
+                                'usr_3': {
+                                    'default': 0x00,
+                                    'name': 'msb'
+                                },
+                                'usr_4': {
+                                    'default': 0x00,
+                                    'name': 'lsb'
+                                },
+                                'usr_5': {
+                                    'default': 0x01,
+                                    'name': 'num_records'
+                                },  # 0x00 = All, 0x01 = 1 Record
+                                'usr_6': {
+                                    'default': 0x00
+                                },
+                                'usr_7': {
+                                    'default': 0x00
+                                },
+                                'usr_8': {
+                                    'default': 0x00
+                                },
+                                'usr_9': {
+                                    'default': 0x00
+                                },
+                                'usr_10': {
+                                    'default': 0x00
+                                },
+                                'usr_11': {
+                                    'default': 0x00
+                                },
+                                'usr_12': {
+                                    'default': 0x00
+                                },
+                                'usr_13': {
+                                    'default': 0x00
+                                },
+                                'usr_14': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'extended',
                                 'message_type': 'direct'
                             }
@@ -1056,22 +1218,67 @@ COMMAND_SCHEMA = {
                     'value': [
                         {'Firmware': 'all',
                             'value': {
-                                'cmd_1': 0x2F,
-                                'cmd_2': 0x00,
-                                'usr_1': 0x00,  # Unused
-                                'usr_2': 0x02,  # Write ALDB
-                                'usr_3': lambda x: x._aldb.msb,  # Addr Hi
-                                'usr_4': lambda x: x._aldb.lsb,  # Addr Low
-                                'usr_5': 0x08,  # Write 8Bytes
-                                'usr_6': 0x00,  # Record
-                                'usr_7': 0x00,  # Record
-                                'usr_8': 0x00,  # Record
-                                'usr_9': 0x00,  # Record
-                                'usr_10': 0x00,  # Record
-                                'usr_11': 0x00,  # Record
-                                'usr_12': 0x00,  # Record
-                                'usr_13': 0x00,  # Record
-                                'usr_14': 0x00,  # Unused
+                                'cmd_1': {
+                                    'default': 0x2F
+                                },
+                                'cmd_2': {
+                                    'default': 0x00
+                                },
+                                'usr_1': {
+                                    'default': 0x00
+                                },
+                                'usr_2': {
+                                    'default': 0x02
+                                },
+                                'usr_3': {
+                                    'default': 0x00,
+                                    'function': lambda x: x._aldb.msb,
+                                    'name': 'msb'
+                                },
+                                'usr_4': {
+                                    'default': 0x00,
+                                    'function': lambda x: x._aldb.lsb,
+                                    'name': 'lsb'
+                                },
+                                'usr_5': {
+                                    'default': 0x08,
+                                    'name': 'num_bytes'
+                                },
+                                'usr_6': {
+                                    'default': 0x00,
+                                    'name': 'link_flags'
+                                },
+                                'usr_7': {
+                                    'default': 0x00,
+                                    'name': 'group'
+                                },
+                                'usr_8': {
+                                    'default': 0x00,
+                                    'name': 'dev_addr_hi'
+                                },
+                                'usr_9': {
+                                    'default': 0x00,
+                                    'name': 'dev_addr_mid'
+                                },
+                                'usr_10': {
+                                    'default': 0x00,
+                                    'name': 'dev_addr_low'
+                                },
+                                'usr_11': {
+                                    'default': 0x00,
+                                    'name': 'data_1'
+                                },
+                                'usr_12': {
+                                    'default': 0x00,
+                                    'name': 'data_2'
+                                },
+                                'usr_13': {
+                                    'default': 0x00,
+                                    'name': 'data_3'
+                                },
+                                'usr_14': {
+                                    'default': 0x00
+                                },
                                 'msg_length': 'extended',
                                 'message_type': 'direct'
                             }

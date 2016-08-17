@@ -18,6 +18,7 @@ class PLM_Message(object):
         self._plm_schema = {}
         self._raw_msg = bytes()
         self._insteon_msg = {}
+        self._insteon_attr = {}
         self._creation_time = time.time()
         self._time_sent = 0
         self._plm_success_callback = lambda: None
@@ -135,7 +136,9 @@ class PLM_Message(object):
         msg_direction = 'send_byte_pos'
         if self.is_incomming:
             msg_direction = 'recv_byte_pos'
-        return self.plm_schema[msg_direction]
+        ret = self._insteon_attr.copy()
+        ret.update(self.plm_schema[msg_direction])
+        return ret
 
     @property
     def parsed_attributes(self):
@@ -212,7 +215,7 @@ class PLM_Message(object):
     @failed.setter
     def failed(self, boolean):
         self._failed = boolean
-        if boolean == True:
+        if boolean is True:
             self._msg_failed_callback()
 
     @property
@@ -222,7 +225,7 @@ class PLM_Message(object):
     @plm_ack.setter
     def plm_ack(self, boolean):
         self._plm_ack = boolean
-        if boolean == True:
+        if boolean is True:
             self.plm_success_callback()
 
     @property
@@ -297,23 +300,27 @@ class Insteon_Message(object):
         msg_flags = self._construct_msg_flags(dev_cmd)
         self._parent._insert_byte_into_raw(msg_flags, 'msg_flags')
         self._parent._insert_byte_into_raw(
-            self._parent.device.dev_id_hi, 'to_addr_hi')
+            self._parent.device.dev_addr_hi, 'to_addr_hi')
         self._parent._insert_byte_into_raw(
-            self._parent.device.dev_id_mid, 'to_addr_mid')
+            self._parent.device.dev_addr_mid, 'to_addr_mid')
         self._parent._insert_byte_into_raw(
-            self._parent.device.dev_id_low, 'to_addr_low')
-        # Process functions if they exist
+            self._parent.device.dev_addr_low, 'to_addr_low')
         keys = ('cmd_1', 'cmd_2', 'usr_1', 'usr_2',
                 'usr_3', 'usr_4', 'usr_5', 'usr_6',
                 'usr_7', 'usr_8', 'usr_9', 'usr_10',
                 'usr_11', 'usr_12', 'usr_13', 'usr_14')
-        # could shorten this by just searching for callable keys in command
         for key in keys:
-            if key in dev_cmd and callable(dev_cmd[key]):
-                value = dev_cmd[key](self._parent.device)
-                self._parent._insert_byte_into_raw(value, key)
-            elif key in dev_cmd:
-                self._parent._insert_byte_into_raw(dev_cmd[key], key)
+            if key in dev_cmd:
+                dev_byte = dev_cmd[key]
+                if 'default' in dev_byte:
+                    self._parent._insert_byte_into_raw(dev_byte['default'],
+                                                       key)
+                if 'function' in dev_byte:
+                    value = dev_byte['function'](self._parent.device)
+                    self._parent._insert_byte_into_raw(value, key)
+                if 'name' in dev_byte:
+                    self._parent._insteon_attr[dev_byte['name']] = \
+                        self._parent.attribute_positions[key]
         self._device_cmd_name = dev_cmd['name']
 
     def _construct_msg_flags(self, dev_cmd):
