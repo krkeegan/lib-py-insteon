@@ -5,7 +5,6 @@ import time
 import atexit
 import signal
 import sys
-import threading
 
 from .plm import PLM
 from .msg_schema import *
@@ -25,10 +24,8 @@ class Insteon_Core(object):
         signal.signal(signal.SIGINT, self._signal_handler)
 
     def start_rest_server(self):
-        server = http.server.HTTPServer(('', 8080), HTTPHandler)
-        server.core = self
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
+        rest_server = Rest_Server(self)
+        rest_server.start()
 
     def loop_once(self):
         '''Perform one loop of processing the data waiting to be
@@ -65,7 +62,7 @@ class Insteon_Core(object):
     def get_plm_by_id(self, id):
         ret = None
         for plm in self._plms:
-            if plm.device_id == id:
+            if plm.dev_addr_str == id:
                 ret = plm
         return ret
 
@@ -85,7 +82,7 @@ class Insteon_Core(object):
                 plm_point = plm._attributes.copy()
                 plm_point['ALDB'] = plm._aldb.get_all_records_str()
                 plm_point['Devices'] = {}
-                out_data['PLMs'][plm.device_id] = plm_point
+                out_data['PLMs'][plm.dev_addr_str] = plm_point
                 for address, device in plm._devices.items():
                     dev_point = device._attributes.copy()
                     dev_point['ALDB'] = device._aldb.get_all_records_str()

@@ -20,6 +20,7 @@ class Insteon_Device(Root_Insteon):
         self.last_sent_msg = ''
         self.last_rcvd_msg = ''
         self._recent_inc_msgs = {}
+        self.create_group(1, Insteon_Group)
         self._init_step_1()
 
     def _init_step_1(self):
@@ -38,12 +39,6 @@ class Insteon_Device(Root_Insteon):
 
     def _init_step_3(self):
         self.send_command('light_status_request')
-
-    @property
-    def device_id_str(self):
-        ret = BYTE_TO_HEX(
-            bytes([self._dev_addr_hi, self._dev_addr_mid, self._dev_addr_low]))
-        return ret
 
     @property
     def dev_addr_hi(self):
@@ -374,8 +369,8 @@ class Insteon_Device(Root_Insteon):
     def _ext_aldb_rcvd(self, msg):
         # Duplicate messages will not cause errors, so we don't check for them
         last_msg = self.search_last_sent_msg(insteon_cmd='read_aldb')
-        req_msb = last_msg.get_byte_by_name('usr_3')
-        req_lsb = last_msg.get_byte_by_name('usr_4')
+        req_msb = last_msg.get_byte_by_name('msb')
+        req_lsb = last_msg.get_byte_by_name('lsb')
         msg_msb = msg.get_byte_by_name('usr_3')
         msg_lsb = msg.get_byte_by_name('usr_4')
         if ((req_lsb == msg_lsb and req_msb == msg_msb) or
@@ -436,8 +431,7 @@ class Insteon_Device(Root_Insteon):
                 cmd_schema = self._recursive_search_cmd(
                     cmd_schema, search_item)
                 if not cmd_schema:
-                    # TODO figure out some way to allow queuing prior to dev
-                    # cat?
+                    # TODO figure out some way to allow queuing prior to devcat?
                     print(command_name, ' not available for this device')
                     break
             if cmd_schema:
@@ -468,7 +462,7 @@ class Insteon_Device(Root_Insteon):
     def write_aldb_record(self, msb, lsb):
         # TODO This is only the base structure still need to add more basically just
         # deletes things right now
-        dev_bytes = {'usr_3': msb, 'usr_4': lsb}
+        dev_bytes = {'msb': msb, 'lsb': lsb}
         self.send_command('write_aldb', '', dev_bytes=dev_bytes)
 
     def add_plm_to_dev_link(self):

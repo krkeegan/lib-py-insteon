@@ -1232,12 +1232,10 @@ COMMAND_SCHEMA = {
                                 },
                                 'usr_3': {
                                     'default': 0x00,
-                                    'function': lambda x: x._aldb.msb,
                                     'name': 'msb'
                                 },
                                 'usr_4': {
                                     'default': 0x00,
-                                    'function': lambda x: x._aldb.lsb,
                                     'name': 'lsb'
                                 },
                                 'usr_5': {

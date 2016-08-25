@@ -13,17 +13,8 @@ from .msg_schema import *
 
 class PLM_Group(Insteon_Group):
 
-    def __init__(self, plm, group_number):
-        self._plm = plm
-        self._group_number = group_number
-
-    @property
-    def plm(self):
-        return self._plm
-
-    @property
-    def group_number(self):
-        return self._group_number
+    def __init__(self, parent, group_number):
+        super().__init__(parent, group_number)
 
     def send_command(self, command_name, state='', plm_bytes={}):
         # TODO are the state and plm_bytes needed?
@@ -36,12 +27,12 @@ class PLM_Group(Insteon_Group):
             'cmd_1': command,
             'cmd_2': 0x00,
         }
-        message = PLM_Message(self.plm,
-                              device=self.plm,
+        message = PLM_Message(self.parent,
+                              device=self.parent,
                               plm_cmd='all_link_send',
                               plm_bytes=plm_bytes)
-        self.plm._queue_device_msg(message, 'all_link_send')
-        records = self.plm._aldb.get_matching_records({
+        self.parent._queue_device_msg(message, 'all_link_send')
+        records = self.parent._aldb.get_matching_records({
             'controller': True,
             'group': self.group_number,
             'in_use': True
@@ -51,7 +42,7 @@ class PLM_Group(Insteon_Group):
         message.seq_lock = True
         message.seq_time = (len(records) + 1) * (87 / 1000 * 6)
         for position in records:
-            linked_obj = self.plm._aldb.get_linked_obj(position)
+            linked_obj = self.parent._aldb.get_linked_obj(position)
             # Queue a cleanup message on each device, this msg will
             # be cleared from the queue on receipt of a cleanup
             # ack
@@ -78,10 +69,15 @@ class PLM(Root_Insteon):
         self._wait_to_send = 0
         self._last_x10_house = ''
         self._last_x10_unit = ''
-        self.device_id = ''
+        self._dev_addr_hi = ''
+        self._dev_addr_mid = ''
+        self._dev_addr_low = ''
         self.port_active = True
         if 'device_id' in kwargs:
-            self.device_id = kwargs['device_id']
+            id_bytes = ID_STR_TO_BYTES(kwargs['device_id'])
+            self._dev_addr_hi = id_bytes[0]
+            self._dev_addr_mid = id_bytes[1]
+            self._dev_addr_low = id_bytes[2]
         port = ''
         if 'attributes' in kwargs:
             port = kwargs['attributes']['port']
@@ -102,12 +98,46 @@ class PLM(Root_Insteon):
         except serial.serialutil.SerialException:
             print('unable to connect to port', port)
             self.port_active = False
-        if self.device_id == '':
+        if self.dev_addr_str == '':
             self.send_command('plm_info')
         if self._aldb.have_aldb_cache() is False:
             self._aldb.query_aldb()
-        for group_num in range(0x02, 0xFF):
+        for group_num in range(0x01, 0xFF):
             self.create_group(group_num, PLM_Group)
+
+    @property
+    def dev_cat(self):
+        return self.attribute('dev_cat')
+
+    @property
+    def sub_cat(self):
+        return self.attribute('sub_cat')
+
+    @property
+    def firmware(self):
+        return self.attribute('firmware')
+
+    @property
+    def port(self):
+        return self.attribute('port')
+
+    @property
+    def dev_addr_hi(self):
+        return self._dev_addr_hi
+
+    @property
+    def dev_addr_mid(self):
+        return self._dev_addr_mid
+
+    @property
+    def dev_addr_low(self):
+        return self._dev_addr_low
+
+    @property
+    def dev_addr_str(self):
+        ret = BYTE_TO_HEX(
+            bytes([self.dev_addr_hi, self.dev_addr_mid, self.dev_addr_low]))
+        return ret
 
     def add_device(self, device_id, **kwargs):
         device_id = device_id.upper()
@@ -272,7 +302,7 @@ class PLM(Root_Insteon):
             print(
                 now,
                 'Error: the port',
-                self.attribute('port'),
+                self.port,
                 'is not active, unable to send message'
             )
         return
@@ -283,8 +313,6 @@ class PLM(Root_Insteon):
             self._dev_addr_hi = msg_obj.get_byte_by_name('plm_addr_hi')
             self._dev_addr_mid = msg_obj.get_byte_by_name('plm_addr_mid')
             self._dev_addr_low = msg_obj.get_byte_by_name('plm_addr_low')
-            self.device_id = BYTE_TO_HEX(
-                bytes([self._dev_addr_hi, self._dev_addr_mid, self._dev_addr_low]))
             self.attribute('dev_cat', msg_obj.get_byte_by_name('dev_cat'))
             self.attribute('sub_cat', msg_obj.get_byte_by_name('sub_cat'))
             self.attribute('firmware', msg_obj.get_byte_by_name('firmware'))

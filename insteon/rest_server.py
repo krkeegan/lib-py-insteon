@@ -1,33 +1,33 @@
-import http.server
+import threading
+import pprint
+import json
+
+from bottle import route, run, Bottle
 
 
-class HTTPHandler(http.server.BaseHTTPRequestHandler):
+class Rest_Server(Bottle):
+    '''The REST front end'''
 
-    def do_GET(self):
-        if self.path == '/':
-            self.send_html_headers()
-            html = (
-                '''
-<html>
-    <head>
-        <title> Configuration </title>
-    </head>
-    <body>
-'''
-            )
-            core = self.server.core
-            plms = core.get_all_plms()
-            html += "<h3>PLMS</h3>\n"
-            for plm in plms:
-                html += plm.device_id + "<br>\n"
-                devices = plm.get_all_devices()
-                html += "<h4>Devices</h4>\n"
-                for device in devices:
-                    html += device.device_id_str + "<br>\n"
-            self.wfile.write(bytes(html, 'UTF-8'))
-        return
+    def __init__(self, core):
+        super(Rest_Server, self).__init__()
+        self._core = core
+        self.route('/plms', callback=self.list_plms)
 
-    def send_html_headers(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'html')
-        self.end_headers()
+    def start(self):
+        threading.Thread(target=self.run, kwargs=dict(host='localhost', port=8080, debug=True)).start()
+
+    def list_plms(self):
+        plms = self._core.get_all_plms()
+        ret = {}
+        for plm in plms:
+            ret[plm.dev_addr_str] = {
+                'dev_cat'       : plm.dev_cat,
+                'sub_cat'       : plm.sub_cat,
+                'firmware'      : plm.firmware,
+                'port'          : plm.port,
+                'port_active'   : plm.port_active
+            }
+        return self.jsonify(ret)
+
+    def jsonify(self, data):
+        return json.dumps(data, indent=4, sort_keys=True)

@@ -29,14 +29,6 @@ class ALDB(object):
             ret[key] = BYTE_TO_HEX(value)
         return ret
 
-    def have_aldb_cache(self):
-        # TODO distinguish between empty aldb and no aldb this is only used
-        # for the PLM so far, perhaps move there?
-        ret = True
-        if len(self._aldb) == 0:
-            ret = False
-        return ret
-
     def load_aldb_records(self, records):
         for key, record in records.items():
             self.edit_record(key, bytearray.fromhex(record))
@@ -134,7 +126,7 @@ class Device_ALDB(ALDB):
             }
             trigger = Trigger(trigger_attributes)
             trigger.trigger_function = lambda: self.i2_next_aldb()
-            trigger_name = self._parent.device_id_str + 'query_aldb'
+            trigger_name = self._parent.dev_addr_str + 'query_aldb'
             self._parent.plm._trigger_mngr.add_trigger(trigger_name, trigger)
 
     def i2_next_aldb(self):
@@ -169,7 +161,7 @@ class Device_ALDB(ALDB):
             }
             trigger = Trigger(trigger_attributes)
             trigger.trigger_function = lambda: self.i2_next_aldb()
-            trigger_name = self._parent.device_id_str + 'query_aldb'
+            trigger_name = self._parent.dev_addr_str + 'query_aldb'
             self._parent.plm._trigger_mngr.add_trigger(trigger_name, trigger)
 
     def i1_start_aldb_entry_query(self, msb, lsb):
@@ -210,6 +202,13 @@ class PLM_ALDB(ALDB):
         position = str(len(self._aldb) + 1)
         position = position.zfill(4)
         self._aldb[position] = aldb
+
+    def have_aldb_cache(self):
+        # TODO This will return false for an empty aldb as well, do we care?
+        ret = True
+        if len(self._aldb) == 0:
+            ret = False
+        return ret
 
     def query_aldb(self):
         '''Queries the PLM for a list of the link records saved on
@@ -413,42 +412,55 @@ class Base_Device(object):
 
 class Insteon_Group(object):
 
+    def __init__(self, parent, group_number):
+        self._parent = parent
+        self._group_number = group_number
+
     @property
     def group_number(self):
-        # sub groups override that
-        return 1
+        return self._group_number
+
+    @property
+    def parent(self):
+        return self._parent
 
     @property
     def dev_addr_hi(self):
-        return self._parent._dev_addr_hi
+        return self.parent._dev_addr_hi
 
     @property
     def dev_addr_mid(self):
-        return self._parent._dev_addr_mid
+        return self.parent._dev_addr_mid
 
     @property
     def dev_addr_low(self):
-        return self._parent._dev_addr_low
+        return self.parent._dev_addr_low
+
+    @property
+    def dev_addr_str(self):
+        ret = BYTE_TO_HEX(
+            bytes([self.dev_addr_hi, self.dev_addr_mid, self.dev_addr_low]))
+        return ret
 
     @property
     def dev_cat(self):
-        return self._parent.dev_cat
+        return self.parent.attribute('dev_cat')
 
     @property
     def sub_cat(self):
-        return self._parent.sub_cat
+        return self.parent.attribute('sub_cat')
 
     @property
     def firmware(self):
-        return self._parent.firmware
+        return self.parent.attribute('firmware')
 
     def create_link(self, responder, d1, d2, d3):
         pass
-        self._aldb.create_controller(responder)
+        self.parent._aldb.create_controller(responder)
         responder._aldb.create_responder(self, d1, d2, d3)
 
 
-class Root_Insteon(Base_Device, Insteon_Group):
+class Root_Insteon(Base_Device):
 
     def __init__(self, core, plm, **kwargs):
         self._groups = []
