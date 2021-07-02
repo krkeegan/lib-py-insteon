@@ -1,3 +1,9 @@
+# Abandoned
+
+I discovered [Insteon-MQTT](https://github.com/TD22057/insteon-mqtt) after I started this work.  It was much further along and I have contributed all of my efforts their.
+
+This remains solely for reference.
+
 # lib-py-insteon
 A python library for interfacing with the Insteon PLM
 
